@@ -1,0 +1,12 @@
+test_camera_sensor_broadcaster:
+  ros__parameters:
+    # Setting mendatory parameters
+    sensor_name: "camera_sensor"
+    frame_id: "camera_sensor_frame"
+
+    # Setting parameters with changed default value to check those are used
+    height: 480
+    width: 640
+    encoding: "bgr8"
+    is_bigendian: 0
+    step: 1920
