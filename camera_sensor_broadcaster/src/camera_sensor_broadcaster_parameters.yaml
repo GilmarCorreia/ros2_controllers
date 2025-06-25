@@ -1,0 +1,38 @@
+camera_sensor_broadcaster:
+  sensor_name: {
+    type: string,
+    default_value: "",
+    description: "Name of the sensor used as prefix for interfaces if there are no individual interface names defined.",
+  }
+  frame_id: {
+    type: string,
+    default_value: "",
+    description: "Sensor's frame_id in which values are published.",
+  }
+  height: {
+    type: int,
+    default_value: 480,
+    description: "Height of the camera image in pixels.",
+  }
+  width: {
+    type: int,
+    default_value: 640,
+    description: "Width of the camera image in pixels.",
+  }
+  encoding: {
+    type: string,
+    default_value: "bgr8",
+    description: "Encoding of the camera image.",
+  }
+  is_bigendian: {
+    type: int,
+    default_value: 0,
+    description: "Whether the camera image is in big-endian format.",
+  }
+  step: {
+    type: int,
+    default_value: 1920,
+    description: "Number of bytes in a row of the camera image.",
+  }
+
+  
