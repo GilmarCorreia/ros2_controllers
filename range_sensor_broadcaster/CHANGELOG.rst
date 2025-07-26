@@ -2,6 +2,12 @@
 Changelog for package range_sensor_broadcaster
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.29.0 (2025-07-23)
+-------------------
+
+4.28.0 (2025-07-14)
+-------------------
+
 4.27.1 (2025-07-02)
 -------------------
 * Fix cmake deprecation (backport `#1780 <https://github.com/ros-controls/ros2_controllers/issues/1780>`_) (`#1782 <https://github.com/ros-controls/ros2_controllers/issues/1782>`_)
