@@ -55,14 +55,8 @@ class JointTrajectoryController : public controller_interface::ControllerInterfa
 public:
   JointTrajectoryController();
 
-  /**
-   * @brief command_interface_configuration
-   */
   controller_interface::InterfaceConfiguration command_interface_configuration() const override;
 
-  /**
-   * @brief command_interface_configuration
-   */
   controller_interface::InterfaceConfiguration state_interface_configuration() const override;
 
   controller_interface::return_type update(
@@ -288,7 +282,15 @@ private:
   {
     for (size_t index = 0; index < num_cmd_joints_; ++index)
     {
-      joint_interface[index].get().set_value(trajectory_point_interface[map_cmd_to_joints_[index]]);
+      if (!joint_interface[index].get().set_value(
+            trajectory_point_interface[map_cmd_to_joints_[index]]))
+      {
+        RCLCPP_ERROR(
+          get_node()->get_logger(),
+          "Failed to set value for joint '%s' in command interface '%s'. ",
+          command_joint_names_[index].c_str(), joint_interface[index].get().get_name().c_str());
+        return;
+      }
     }
   }
 };
