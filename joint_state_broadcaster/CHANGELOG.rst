@@ -2,6 +2,19 @@
 Changelog for package joint_state_broadcaster
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.34.0 (2025-11-10)
+-------------------
+* Fix integer literal for size_t (backport `#1986 <https://github.com/ros-controls/ros2_controllers/issues/1986>`_) (`#1987 <https://github.com/ros-controls/ros2_controllers/issues/1987>`_)
+* Contributors: Christoph Fröhlich
+
+4.33.1 (2025-10-17)
+-------------------
+
+4.33.0 (2025-10-03)
+-------------------
+* Update API for realtime publisher (backport `#1830 <https://github.com/ros-controls/ros2_controllers/issues/1830>`_) (`#1944 <https://github.com/ros-controls/ros2_controllers/issues/1944>`_)
+* Contributors: mergify[bot]
+
 4.32.0 (2025-09-12)
 -------------------
 * Added frame_id to Joint State Broadcaster (backport `#1746 <https://github.com/ros-controls/ros2_controllers/issues/1746>`_) (`#1897 <https://github.com/ros-controls/ros2_controllers/issues/1897>`_)

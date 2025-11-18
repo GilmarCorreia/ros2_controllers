@@ -2,6 +2,17 @@
 Changelog for package omni_wheel_drive_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.34.0 (2025-11-10)
+-------------------
+
+4.33.1 (2025-10-17)
+-------------------
+
+4.33.0 (2025-10-03)
+-------------------
+* Fix: Remove deprecated `rclcpp::spin_some(node)` (backport `#1928 <https://github.com/ros-controls/ros2_controllers/issues/1928>`_) (`#1932 <https://github.com/ros-controls/ros2_controllers/issues/1932>`_)
+* Contributors: mergify[bot]
+
 4.32.0 (2025-09-12)
 -------------------
 * Fix use of M_PI in omni_wheel_driver_controller on MSVC (backport `#1886 <https://github.com/ros-controls/ros2_controllers/issues/1886>`_) (`#1887 <https://github.com/ros-controls/ros2_controllers/issues/1887>`_)
