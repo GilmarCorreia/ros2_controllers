@@ -2,6 +2,23 @@
 Changelog for package steering_controllers_library
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.37.0 (2026-02-03)
+-------------------
+* Populate pose covariance correctly in steering controllers (backport `#2109 <https://github.com/ros-controls/ros2_controllers/issues/2109>`_) (`#2137 <https://github.com/ros-controls/ros2_controllers/issues/2137>`_)
+* Contributors: mergify[bot]
+
+4.36.0 (2025-12-31)
+-------------------
+* Fix open_loop odometry of steering controllers (backport `#2087 <https://github.com/ros-controls/ros2_controllers/issues/2087>`_) (`#2088 <https://github.com/ros-controls/ros2_controllers/issues/2088>`_)
+* Controller interface api update to ros2_controller packages (backport `#1973 <https://github.com/ros-controls/ros2_controllers/issues/1973>`_) (`#2068 <https://github.com/ros-controls/ros2_controllers/issues/2068>`_)
+* Contributors: mergify[bot]
+
+4.35.0 (2025-12-01)
+-------------------
+* Rename Odometry Class to SteeringKinematics (backport `#1996 <https://github.com/ros-controls/ros2_controllers/issues/1996>`_) (`#2013 <https://github.com/ros-controls/ros2_controllers/issues/2013>`_)
+* Rename joint_reference_interfaces\_ to reference_interface_names (backport `#2008 <https://github.com/ros-controls/ros2_controllers/issues/2008>`_) (`#2011 <https://github.com/ros-controls/ros2_controllers/issues/2011>`_)
+* Contributors: mergify[bot]
+
 4.34.0 (2025-11-10)
 -------------------
 

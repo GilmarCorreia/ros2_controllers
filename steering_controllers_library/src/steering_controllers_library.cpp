@@ -160,7 +160,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
   configure_odometry();
 
   // Check if the number of traction joints is correct
-  if (odometry_.get_odometry_type() == steering_odometry::BICYCLE_CONFIG)
+  if (odometry_.get_odometry_type() == steering_kinematics::BICYCLE_CONFIG)
   {
     if (params_.traction_joints_names.size() != 1)
     {
@@ -171,7 +171,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
       return controller_interface::CallbackReturn::ERROR;
     }
   }
-  else if (odometry_.get_odometry_type() == steering_odometry::TRICYCLE_CONFIG)
+  else if (odometry_.get_odometry_type() == steering_kinematics::TRICYCLE_CONFIG)
   {
     if (params_.traction_joints_names.size() != 2)
     {
@@ -182,7 +182,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
       return controller_interface::CallbackReturn::ERROR;
     }
   }
-  else if (odometry_.get_odometry_type() == steering_odometry::ACKERMANN_CONFIG)
+  else if (odometry_.get_odometry_type() == steering_kinematics::ACKERMANN_CONFIG)
   {
     if (params_.traction_joints_names.size() != 2)
     {
@@ -194,7 +194,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
     }
   }
   // Check if the number of steering joints is correct
-  if (odometry_.get_odometry_type() == steering_odometry::BICYCLE_CONFIG)
+  if (odometry_.get_odometry_type() == steering_kinematics::BICYCLE_CONFIG)
   {
     if (params_.steering_joints_names.size() != 1)
     {
@@ -205,7 +205,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
       return controller_interface::CallbackReturn::ERROR;
     }
   }
-  else if (odometry_.get_odometry_type() == steering_odometry::TRICYCLE_CONFIG)
+  else if (odometry_.get_odometry_type() == steering_kinematics::TRICYCLE_CONFIG)
   {
     if (params_.steering_joints_names.size() != 1)
     {
@@ -216,7 +216,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
       return controller_interface::CallbackReturn::ERROR;
     }
   }
-  else if (odometry_.get_odometry_type() == steering_odometry::ACKERMANN_CONFIG)
+  else if (odometry_.get_odometry_type() == steering_kinematics::ACKERMANN_CONFIG)
   {
     if (params_.steering_joints_names.size() != 2)
     {
@@ -233,7 +233,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
 
   if (!params_.traction_joints_state_names.empty())
   {
-    if (odometry_.get_odometry_type() == steering_odometry::BICYCLE_CONFIG)
+    if (odometry_.get_odometry_type() == steering_kinematics::BICYCLE_CONFIG)
     {
       if (params_.traction_joints_state_names.size() != 1)
       {
@@ -245,7 +245,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
         return controller_interface::CallbackReturn::ERROR;
       }
     }
-    else if (odometry_.get_odometry_type() == steering_odometry::TRICYCLE_CONFIG)
+    else if (odometry_.get_odometry_type() == steering_kinematics::TRICYCLE_CONFIG)
     {
       if (params_.traction_joints_state_names.size() != 2)
       {
@@ -257,7 +257,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
         return controller_interface::CallbackReturn::ERROR;
       }
     }
-    else if (odometry_.get_odometry_type() == steering_odometry::ACKERMANN_CONFIG)
+    else if (odometry_.get_odometry_type() == steering_kinematics::ACKERMANN_CONFIG)
     {
       if (params_.traction_joints_state_names.size() != 2)
       {
@@ -278,7 +278,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
 
   if (!params_.steering_joints_state_names.empty())
   {
-    if (odometry_.get_odometry_type() == steering_odometry::BICYCLE_CONFIG)
+    if (odometry_.get_odometry_type() == steering_kinematics::BICYCLE_CONFIG)
     {
       if (params_.steering_joints_state_names.size() != 1)
       {
@@ -290,7 +290,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
         return controller_interface::CallbackReturn::ERROR;
       }
     }
-    else if (odometry_.get_odometry_type() == steering_odometry::TRICYCLE_CONFIG)
+    else if (odometry_.get_odometry_type() == steering_kinematics::TRICYCLE_CONFIG)
     {
       if (params_.steering_joints_state_names.size() != 1)
       {
@@ -302,7 +302,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
         return controller_interface::CallbackReturn::ERROR;
       }
     }
-    else if (odometry_.get_odometry_type() == steering_odometry::ACKERMANN_CONFIG)
+    else if (odometry_.get_odometry_type() == steering_kinematics::ACKERMANN_CONFIG)
     {
       if (params_.steering_joints_state_names.size() != 2)
       {
@@ -355,14 +355,15 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
   odom_state_msg_.child_frame_id = params_.base_frame_id;
   odom_state_msg_.pose.pose.position.z = 0;
 
-  auto & covariance = odom_state_msg_.twist.covariance;
-  constexpr size_t NUM_DIMENSIONS = 6;
-  for (size_t index = 0; index < 6; ++index)
+  const size_t NUM_DIMENSIONS = 6;
+  auto & pose_cov = odom_state_msg_.pose.covariance;
+  auto & twist_cov = odom_state_msg_.twist.covariance;
+  for (size_t i = 0; i < NUM_DIMENSIONS; ++i)
   {
-    // 0, 7, 14, 21, 28, 35
-    const size_t diagonal_index = NUM_DIMENSIONS * index + index;
-    covariance[diagonal_index] = params_.pose_covariance_diagonal[index];
-    covariance[diagonal_index] = params_.twist_covariance_diagonal[index];
+    // indices of the diagonal: 0, 7, 14, 21, 28, 35
+    const size_t index = (NUM_DIMENSIONS + 1) * i;
+    pose_cov[index] = params_.pose_covariance_diagonal[i];
+    twist_cov[index] = params_.twist_covariance_diagonal[i];
   }
 
   try
@@ -582,8 +583,12 @@ controller_interface::return_type SteeringControllersLibrary::update_reference_f
 controller_interface::return_type SteeringControllersLibrary::update_and_write_commands(
   const rclcpp::Time & time, const rclcpp::Duration & period)
 {
-  update_odometry(period);
   auto logger = get_node()->get_logger();
+
+  // store current ref (for open loop odometry) and update odometry
+  last_linear_velocity_ = reference_interfaces_[0];
+  last_angular_velocity_ = reference_interfaces_[1];
+  update_odometry(period);
 
   // MOVE ROBOT
 
