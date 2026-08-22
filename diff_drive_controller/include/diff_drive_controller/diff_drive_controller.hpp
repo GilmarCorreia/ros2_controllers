@@ -79,7 +79,8 @@ public:
 protected:
   bool on_set_chained_mode(bool chained_mode) override;
 
-  std::vector<hardware_interface::CommandInterface> on_export_reference_interfaces() override;
+  std::vector<hardware_interface::CommandInterface::SharedPtr> on_export_reference_interfaces_list()
+    override;
 
   struct WheelHandle
   {
@@ -134,7 +135,6 @@ protected:
   std::unique_ptr<SpeedLimiter> limiter_linear_;
   std::unique_ptr<SpeedLimiter> limiter_angular_;
 
-  bool publish_limited_velocity_ = false;
   std::shared_ptr<rclcpp::Publisher<TwistStamped>> limited_velocity_publisher_ = nullptr;
   std::shared_ptr<realtime_tools::RealtimePublisher<TwistStamped>>
     realtime_limited_velocity_publisher_ = nullptr;

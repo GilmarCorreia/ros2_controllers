@@ -2,6 +2,41 @@
 Changelog for package admittance_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.42.1 (2026-08-12)
+-------------------
+
+4.42.0 (2026-08-10)
+-------------------
+* Use new Command/State Interfaces API for tests (backport `#2476 <https://github.com/ros-controls/ros2_controllers/issues/2476>`_) (`#2532 <https://github.com/ros-controls/ros2_controllers/issues/2532>`_)
+* Use new chainable controller exports API (backport `#2350 <https://github.com/ros-controls/ros2_controllers/issues/2350>`_) (`#2453 <https://github.com/ros-controls/ros2_controllers/issues/2453>`_)
+* Fix admittance position state updates (backport `#2514 <https://github.com/ros-controls/ros2_controllers/issues/2514>`_) (`#2519 <https://github.com/ros-controls/ros2_controllers/issues/2519>`_)
+* admittance_controller userdoc: fix typo (backport `#2479 <https://github.com/ros-controls/ros2_controllers/issues/2479>`_) (`#2482 <https://github.com/ros-controls/ros2_controllers/issues/2482>`_)
+* Contributors: mergify[bot]
+
+4.41.0 (2026-07-01)
+-------------------
+* Final test cleanup - call appropriate lifecycle transitions (backport `#2429 <https://github.com/ros-controls/ros2_controllers/issues/2429>`_) (`#2432 <https://github.com/ros-controls/ros2_controllers/issues/2432>`_)
+* Test fix - call appropriate lifecycle transitions in controller tests: admittance_controller, pose_broadcaster, tricycle_steering_controller (backport `#2345 <https://github.com/ros-controls/ros2_controllers/issues/2345>`_) (`#2354 <https://github.com/ros-controls/ros2_controllers/issues/2354>`_)
+* Contributors: mergify[bot]
+
+4.40.1 (2026-05-12)
+-------------------
+* fix: correct ASSERT_EQ to ASSERT_NE in admittance controller load test (backport `#2264 <https://github.com/ros-controls/ros2_controllers/issues/2264>`_) (`#2338 <https://github.com/ros-controls/ros2_controllers/issues/2338>`_)
+* Contributors: mergify[bot]
+
+4.40.0 (2026-04-22)
+-------------------
+* Update admittance_controller to use shared 6D robot description (backport `#2173 <https://github.com/ros-controls/ros2_controllers/issues/2173>`_) (`#2310 <https://github.com/ros-controls/ros2_controllers/issues/2310>`_)
+* Contributors: mergify[bot]
+
+4.39.0 (2026-04-04)
+-------------------
+
+4.38.0 (2026-03-12)
+-------------------
+* Fix dynamic allocation in admittance_rule (backport `#2150 <https://github.com/ros-controls/ros2_controllers/issues/2150>`_) (`#2154 <https://github.com/ros-controls/ros2_controllers/issues/2154>`_)
+* Contributors: mergify[bot]
+
 4.37.0 (2026-02-03)
 -------------------
 * Check robot description validity in AdmittanceController (backport `#2009 <https://github.com/ros-controls/ros2_controllers/issues/2009>`_) (`#2113 <https://github.com/ros-controls/ros2_controllers/issues/2113>`_)

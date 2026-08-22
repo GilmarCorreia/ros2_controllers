@@ -2,6 +2,31 @@
 Changelog for package ros2_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.42.1 (2026-08-12)
+-------------------
+
+4.42.0 (2026-08-10)
+-------------------
+* Add battery_state_broadcaster (backport `#2086 <https://github.com/ros-controls/ros2_controllers/issues/2086>`_) (`#2521 <https://github.com/ros-controls/ros2_controllers/issues/2521>`_)
+* Contributors: mergify[bot]
+
+4.41.0 (2026-07-01)
+-------------------
+* broadcaster for magnetic field values from a magnetometer (backport `#2214 <https://github.com/ros-controls/ros2_controllers/issues/2214>`_) (`#2371 <https://github.com/ros-controls/ros2_controllers/issues/2371>`_)
+* Contributors: mergify[bot]
+
+4.40.1 (2026-05-12)
+-------------------
+
+4.40.0 (2026-04-22)
+-------------------
+
+4.39.0 (2026-04-04)
+-------------------
+
+4.38.0 (2026-03-12)
+-------------------
+
 4.37.0 (2026-02-03)
 -------------------
 

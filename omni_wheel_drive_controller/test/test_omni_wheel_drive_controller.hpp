@@ -21,8 +21,10 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
+#include "controller_interface/test_utils.hpp"
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/loaned_command_interface.hpp"
 #include "hardware_interface/loaned_state_interface.hpp"
@@ -34,13 +36,16 @@
 #include "rclcpp/time.hpp"
 #include "rclcpp/utilities.hpp"
 
+using controller_interface::activate_succeeds;
+using controller_interface::cleanup_succeeds;
+using controller_interface::configure_succeeds;
+using controller_interface::deactivate_succeeds;
+
 using hardware_interface::HW_IF_POSITION;
 using hardware_interface::HW_IF_VELOCITY;
 
 namespace
 {
-constexpr auto NODE_SUCCESS = controller_interface::CallbackReturn::SUCCESS;
-constexpr auto NODE_ERROR = controller_interface::CallbackReturn::ERROR;
 std::vector<std::string> wheel_names_ = {
   "front_wheel_joint", "left_wheel_joint", "back_wheel_joint", "right_wheel_joint"};
 }  // namespace
@@ -97,6 +102,15 @@ public:
     cmd_vel_publisher_ =
       cmd_vel_publisher_node_->create_publisher<geometry_msgs::msg::TwistStamped>(
         "/test_omni_wheel_drive_controller/cmd_vel", rclcpp::SystemDefaultsQoS());
+  }
+
+  void TearDown() override
+  {
+    // Reset the controller before the fixture is destroyed to ensure the controller's
+    // shutdown transition (which clears loaned interfaces) runs while the underlying
+    // StateInterface/CommandInterface objects are still alive. LoanedStateInterface stores
+    // a const reference (not a shared_ptr), so destruction order matters.
+    controller_.reset();
   }
 
   static void TearDownTestCase() { rclcpp::shutdown(); }
@@ -163,8 +177,9 @@ protected:
     for (size_t i = 0; i < wheels_pos_states_.size(); ++i)
     {
       state_itfs_.emplace_back(
-        hardware_interface::StateInterface(wheel_names[i], HW_IF_POSITION, &wheels_pos_states_[i]));
-      state_ifs.emplace_back(state_itfs_.back());
+        std::make_shared<hardware_interface::StateInterface>(wheel_names[i], HW_IF_POSITION));
+      std::ignore = state_itfs_.back()->set_value(wheels_pos_states_[i]);
+      state_ifs.emplace_back(state_itfs_.back(), nullptr);
     }
 
     std::vector<hardware_interface::LoanedCommandInterface> command_ifs;
@@ -173,8 +188,9 @@ protected:
     for (size_t i = 0; i < wheels_vel_cmds_.size(); ++i)
     {
       command_itfs_.emplace_back(
-        hardware_interface::CommandInterface(wheel_names[i], HW_IF_VELOCITY, &wheels_vel_cmds_[i]));
-      command_ifs.emplace_back(command_itfs_.back());
+        std::make_shared<hardware_interface::CommandInterface>(wheel_names[i], HW_IF_VELOCITY));
+      std::ignore = command_itfs_.back()->set_value(wheels_vel_cmds_[i]);
+      command_ifs.emplace_back(command_itfs_.back(), nullptr);
     }
 
     controller_->assign_interfaces(std::move(command_ifs), std::move(state_ifs));
@@ -188,9 +204,9 @@ protected:
     for (size_t i = 0; i < wheels_vel_states_.size(); ++i)
     {
       state_itfs_.emplace_back(
-        hardware_interface::StateInterface(
-          wheel_names_[i], HW_IF_VELOCITY, &wheels_vel_states_[i]));
-      state_ifs.emplace_back(state_itfs_.back());
+        std::make_shared<hardware_interface::StateInterface>(wheel_names_[i], HW_IF_VELOCITY));
+      std::ignore = state_itfs_.back()->set_value(wheels_vel_states_[i]);
+      state_ifs.emplace_back(state_itfs_.back(), nullptr);
     }
 
     std::vector<hardware_interface::LoanedCommandInterface> command_ifs;
@@ -199,9 +215,9 @@ protected:
     for (size_t i = 0; i < wheels_vel_cmds_.size(); ++i)
     {
       command_itfs_.emplace_back(
-        hardware_interface::CommandInterface(
-          wheel_names_[i], HW_IF_VELOCITY, &wheels_vel_cmds_[i]));
-      command_ifs.emplace_back(command_itfs_.back());
+        std::make_shared<hardware_interface::CommandInterface>(wheel_names_[i], HW_IF_VELOCITY));
+      std::ignore = command_itfs_.back()->set_value(wheels_vel_cmds_[i]);
+      command_ifs.emplace_back(command_itfs_.back(), nullptr);
     }
 
     controller_->assign_interfaces(std::move(command_ifs), std::move(state_ifs));
@@ -238,8 +254,8 @@ protected:
   std::vector<double> wheels_vel_states_ = {1, 1, 1, 1};
   std::vector<double> wheels_vel_cmds_ = {0.1, 0.2, 0.3, 0.4};
 
-  std::vector<hardware_interface::StateInterface> state_itfs_;
-  std::vector<hardware_interface::CommandInterface> command_itfs_;
+  std::vector<hardware_interface::StateInterface::SharedPtr> state_itfs_;
+  std::vector<hardware_interface::CommandInterface::SharedPtr> command_itfs_;
 
   std::vector<std::string> reference_interface_names = {"linear/x", "linear/y", "angular/z"};
 

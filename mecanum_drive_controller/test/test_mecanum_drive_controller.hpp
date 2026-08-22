@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "controller_interface/test_utils.hpp"
 #include "gmock/gmock.h"
 #include "hardware_interface/loaned_command_interface.hpp"
 #include "hardware_interface/loaned_state_interface.hpp"
@@ -36,18 +37,15 @@
 #include "rclcpp/utilities.hpp"
 #include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
 
+using controller_interface::activate_succeeds;
+using controller_interface::configure_succeeds;
+using controller_interface::deactivate_succeeds;
+
 using ControllerStateMsg = mecanum_drive_controller::MecanumDriveController::ControllerStateMsg;
 using ControllerReferenceMsg =
   mecanum_drive_controller::MecanumDriveController::ControllerReferenceMsg;
 using TfStateMsg = mecanum_drive_controller::MecanumDriveController::TfStateMsg;
 using OdomStateMsg = mecanum_drive_controller::MecanumDriveController::OdomStateMsg;
-
-namespace
-{
-constexpr auto NODE_SUCCESS = controller_interface::CallbackReturn::SUCCESS;
-constexpr auto NODE_ERROR = controller_interface::CallbackReturn::ERROR;
-}  // namespace
-// namespace
 
 // subclassing and friending so we can access member variables
 class TestableMecanumDriveController : public mecanum_drive_controller::MecanumDriveController
@@ -91,6 +89,14 @@ class TestableMecanumDriveController : public mecanum_drive_controller::MecanumD
   FRIEND_TEST(MecanumDriveControllerTest, configure_succeeds_tf_test_prefix_true_set_namespace);
   FRIEND_TEST(MecanumDriveControllerTest, configure_succeeds_tf_blank_prefix_true_set_namespace);
 
+  FRIEND_TEST(MecanumDriveControllerTest, test_no_speed_limiter_when_not_configured);
+  FRIEND_TEST(MecanumDriveControllerTest, test_speed_limiter_linear_x);
+  FRIEND_TEST(MecanumDriveControllerTest, test_speed_limiter_linear_y);
+  FRIEND_TEST(MecanumDriveControllerTest, test_speed_limiter_angular_z);
+  FRIEND_TEST(MecanumDriveControllerTest, test_speed_limiter_runtime_update);
+  FRIEND_TEST(MecanumDriveControllerTest, test_reset_buffers_clears_limiter_state);
+  FRIEND_TEST(MecanumDriveControllerTest, test_lifecycle_transitions_reset_limiter_buffers);
+
 public:
   controller_interface::CallbackReturn on_configure(
     const rclcpp_lifecycle::State & previous_state) override
@@ -101,7 +107,9 @@ public:
   controller_interface::CallbackReturn on_activate(
     const rclcpp_lifecycle::State & previous_state) override
   {
-    auto ref_itfs = on_export_reference_interfaces();
+    // export_reference_interfaces() populates ordered_exported_reference_interfaces_
+    export_reference_interfaces();
+    export_state_interfaces();
     return mecanum_drive_controller::MecanumDriveController::on_activate(previous_state);
   }
 
@@ -187,10 +195,11 @@ protected:
 
     for (size_t i = 0; i < joint_command_values_.size(); ++i)
     {
-      command_itfs_.emplace_back(
-        hardware_interface::CommandInterface(
-          command_joint_names_[i], interface_name_, &joint_command_values_[i]));
-      command_ifs.emplace_back(command_itfs_.back());
+      auto cmd_itf = std::make_shared<hardware_interface::CommandInterface>(
+        command_joint_names_[i], interface_name_);
+      std::ignore = cmd_itf->set_value(joint_command_values_[i]);
+      command_itfs_.emplace_back(cmd_itf);
+      command_ifs.emplace_back(command_itfs_.back(), nullptr);
     }
 
     std::vector<hardware_interface::LoanedStateInterface> state_ifs;
@@ -199,10 +208,11 @@ protected:
 
     for (size_t i = 0; i < joint_state_values_.size(); ++i)
     {
-      state_itfs_.emplace_back(
-        hardware_interface::StateInterface(
-          command_joint_names_[i], interface_name_, &joint_state_values_[i]));
-      state_ifs.emplace_back(state_itfs_.back());
+      auto state_itf = std::make_shared<hardware_interface::StateInterface>(
+        command_joint_names_[i], interface_name_);
+      std::ignore = state_itf->set_value(joint_state_values_[i]);
+      state_itfs_.emplace_back(state_itf);
+      state_ifs.emplace_back(state_itfs_.back(), nullptr);
     }
 
     controller_->assign_interfaces(std::move(command_ifs), std::move(state_ifs));
@@ -290,7 +300,7 @@ protected:
   static constexpr char TEST_FRONT_RIGHT_CMD_JOINT_NAME[] = "front_right_wheel_joint";
   static constexpr char TEST_REAR_RIGHT_CMD_JOINT_NAME[] = "back_right_wheel_joint";
   static constexpr char TEST_REAR_LEFT_CMD_JOINT_NAME[] = "back_left_wheel_joint";
-  std::vector<std::string> command_joint_names_ = {
+  const std::vector<std::string> command_joint_names_ = {
     TEST_FRONT_LEFT_CMD_JOINT_NAME, TEST_FRONT_RIGHT_CMD_JOINT_NAME, TEST_REAR_RIGHT_CMD_JOINT_NAME,
     TEST_REAR_LEFT_CMD_JOINT_NAME};
 
@@ -298,10 +308,10 @@ protected:
   static constexpr char TEST_FRONT_RIGHT_STATE_JOINT_NAME[] = "state_front_right_wheel_joint";
   static constexpr char TEST_REAR_RIGHT_STATE_JOINT_NAME[] = "state_back_right_wheel_joint";
   static constexpr char TEST_REAR_LEFT_STATE_JOINT_NAME[] = "state_back_left_wheel_joint";
-  std::vector<std::string> state_joint_names_ = {
+  const std::vector<std::string> state_joint_names_ = {
     TEST_FRONT_LEFT_STATE_JOINT_NAME, TEST_FRONT_RIGHT_STATE_JOINT_NAME,
     TEST_REAR_RIGHT_STATE_JOINT_NAME, TEST_REAR_LEFT_STATE_JOINT_NAME};
-  std::string interface_name_ = hardware_interface::HW_IF_VELOCITY;
+  const std::string interface_name_ = hardware_interface::HW_IF_VELOCITY;
 
   // Controller-related parameters
 
@@ -311,12 +321,10 @@ protected:
   static constexpr double TEST_LINEAR_VELOCITY_X = 1.5;
   static constexpr double TEST_LINEAR_VELOCITY_y = 0.0;
   static constexpr double TEST_ANGULAR_VELOCITY_Z = 0.0;
-  double command_lin_x = 111;
+  const double command_lin_x = 111;
 
-  std::vector<hardware_interface::StateInterface> state_itfs_;
-  std::vector<hardware_interface::CommandInterface> command_itfs_;
-
-  double ref_timeout_ = 0.1;
+  std::vector<hardware_interface::StateInterface::SharedPtr> state_itfs_;
+  std::vector<hardware_interface::CommandInterface::SharedPtr> command_itfs_;
 
   // Test related parameters
   std::unique_ptr<CtrlType> controller_;

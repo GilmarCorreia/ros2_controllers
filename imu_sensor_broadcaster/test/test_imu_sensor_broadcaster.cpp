@@ -16,9 +16,13 @@
  * Authors: Subhas Das, Denis Stogl, Victor Lopez
  */
 
+#define _USE_MATH_DEFINES
+
 #include "test_imu_sensor_broadcaster.hpp"
 
+#include <cmath>
 #include <memory>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -32,11 +36,6 @@ using hardware_interface::LoanedStateInterface;
 using testing::IsEmpty;
 using testing::SizeIs;
 
-namespace
-{
-constexpr auto NODE_SUCCESS = controller_interface::CallbackReturn::SUCCESS;
-}  // namespace
-
 void IMUSensorBroadcasterTest::SetUpTestCase() {}
 
 void IMUSensorBroadcasterTest::TearDownTestCase() {}
@@ -45,6 +44,37 @@ void IMUSensorBroadcasterTest::SetUp()
 {
   // initialize controller
   imu_broadcaster_ = std::make_unique<FriendIMUSensorBroadcaster>();
+
+  imu_orientation_x_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "orientation.x");
+  std::ignore = imu_orientation_x_->set_value(sensor_values_[0]);
+  imu_orientation_y_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "orientation.y");
+  std::ignore = imu_orientation_y_->set_value(sensor_values_[1]);
+  imu_orientation_z_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "orientation.z");
+  std::ignore = imu_orientation_z_->set_value(sensor_values_[2]);
+  imu_orientation_w_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "orientation.w");
+  std::ignore = imu_orientation_w_->set_value(sensor_values_[3]);
+  imu_angular_velocity_x_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "angular_velocity.x");
+  std::ignore = imu_angular_velocity_x_->set_value(sensor_values_[4]);
+  imu_angular_velocity_y_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "angular_velocity.y");
+  std::ignore = imu_angular_velocity_y_->set_value(sensor_values_[5]);
+  imu_angular_velocity_z_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "angular_velocity.z");
+  std::ignore = imu_angular_velocity_z_->set_value(sensor_values_[6]);
+  imu_linear_acceleration_x_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "linear_acceleration.x");
+  std::ignore = imu_linear_acceleration_x_->set_value(sensor_values_[7]);
+  imu_linear_acceleration_y_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "linear_acceleration.y");
+  std::ignore = imu_linear_acceleration_y_->set_value(sensor_values_[8]);
+  imu_linear_acceleration_z_ =
+    std::make_shared<hardware_interface::StateInterface>(sensor_name_, "linear_acceleration.z");
+  std::ignore = imu_linear_acceleration_z_->set_value(sensor_values_[9]);
 }
 
 void IMUSensorBroadcasterTest::TearDown() { imu_broadcaster_.reset(nullptr); }
@@ -124,7 +154,7 @@ TEST_F(IMUSensorBroadcasterTest, SensorName_Configure_Success)
   imu_broadcaster_->get_node()->set_parameter({"frame_id", frame_id_});
 
   // configure passed
-  ASSERT_EQ(imu_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(imu_broadcaster_));
 
   // check interface configuration
   auto cmd_if_conf = imu_broadcaster_->command_interface_configuration();
@@ -144,8 +174,8 @@ TEST_F(IMUSensorBroadcasterTest, SensorName_Activate_Success)
   imu_broadcaster_->get_node()->set_parameter({"frame_id", frame_id_});
 
   // configure and activate success
-  ASSERT_EQ(imu_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
-  ASSERT_EQ(imu_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(imu_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(imu_broadcaster_));
 
   // check interface configuration
   auto cmd_if_conf = imu_broadcaster_->command_interface_configuration();
@@ -156,7 +186,7 @@ TEST_F(IMUSensorBroadcasterTest, SensorName_Activate_Success)
   EXPECT_EQ(state_if_conf.type, controller_interface::interface_configuration_type::INDIVIDUAL);
 
   // deactivate passed
-  ASSERT_EQ(imu_broadcaster_->on_deactivate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(deactivate_succeeds(imu_broadcaster_));
 
   // check interface configuration
   cmd_if_conf = imu_broadcaster_->command_interface_configuration();
@@ -175,8 +205,8 @@ TEST_F(IMUSensorBroadcasterTest, SensorName_Update_Success)
   imu_broadcaster_->get_node()->set_parameter({"sensor_name", sensor_name_});
   imu_broadcaster_->get_node()->set_parameter({"frame_id", frame_id_});
 
-  ASSERT_EQ(imu_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
-  ASSERT_EQ(imu_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(imu_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(imu_broadcaster_));
 
   ASSERT_EQ(
     imu_broadcaster_->update(rclcpp::Time(0), rclcpp::Duration::from_seconds(0.01)),
@@ -191,8 +221,8 @@ TEST_F(IMUSensorBroadcasterTest, SensorName_Publish_Success)
   imu_broadcaster_->get_node()->set_parameter({"sensor_name", sensor_name_});
   imu_broadcaster_->get_node()->set_parameter({"frame_id", frame_id_});
 
-  ASSERT_EQ(imu_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
-  ASSERT_EQ(imu_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(imu_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(imu_broadcaster_));
 
   sensor_msgs::msg::Imu imu_msg;
   subscribe_and_get_message(imu_msg);

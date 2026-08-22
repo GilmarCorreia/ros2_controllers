@@ -2,6 +2,38 @@
 Changelog for package mecanum_drive_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.42.1 (2026-08-12)
+-------------------
+
+4.42.0 (2026-08-10)
+-------------------
+* Throttle speed limiter parameter error logs (backport `#2546 <https://github.com/ros-controls/ros2_controllers/issues/2546>`_) (`#2547 <https://github.com/ros-controls/ros2_controllers/issues/2547>`_)
+* Use new Command/State Interfaces API for tests (backport `#2476 <https://github.com/ros-controls/ros2_controllers/issues/2476>`_) (`#2532 <https://github.com/ros-controls/ros2_controllers/issues/2532>`_)
+* fix: Remove unused variable assignments in mecanum tests (backport `#2534 <https://github.com/ros-controls/ros2_controllers/issues/2534>`_) (`#2537 <https://github.com/ros-controls/ros2_controllers/issues/2537>`_)
+* Use new chainable controller exports API (backport `#2350 <https://github.com/ros-controls/ros2_controllers/issues/2350>`_) (`#2453 <https://github.com/ros-controls/ros2_controllers/issues/2453>`_)
+* Fix safety concerns with halt logic across controllers (backport `#2326 <https://github.com/ros-controls/ros2_controllers/issues/2326>`_) (`#2458 <https://github.com/ros-controls/ros2_controllers/issues/2458>`_)
+* Contributors: mergify[bot]
+
+4.41.0 (2026-07-01)
+-------------------
+* Test fix - call appropriate lifecycle transitions in controller tests: forward_command, mecanum_drive, range_sensor, imu_sensor (backport `#2406 <https://github.com/ros-controls/ros2_controllers/issues/2406>`_) (`#2407 <https://github.com/ros-controls/ros2_controllers/issues/2407>`_)
+* Added velocity limiting to the mecanum controller. (backport `#2313 <https://github.com/ros-controls/ros2_controllers/issues/2313>`_) (`#2362 <https://github.com/ros-controls/ros2_controllers/issues/2362>`_)
+* Contributors: mergify[bot]
+
+4.40.1 (2026-05-12)
+-------------------
+
+4.40.0 (2026-04-22)
+-------------------
+
+4.39.0 (2026-04-04)
+-------------------
+
+4.38.0 (2026-03-12)
+-------------------
+* Consistently add <cmath> include with define for windows (backport `#2193 <https://github.com/ros-controls/ros2_controllers/issues/2193>`_) (`#2195 <https://github.com/ros-controls/ros2_controllers/issues/2195>`_)
+* Contributors: mergify[bot]
+
 4.37.0 (2026-02-03)
 -------------------
 

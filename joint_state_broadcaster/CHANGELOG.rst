@@ -2,6 +2,38 @@
 Changelog for package joint_state_broadcaster
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.42.1 (2026-08-12)
+-------------------
+
+4.42.0 (2026-08-10)
+-------------------
+* Use new Command/State Interfaces API for tests (backport `#2476 <https://github.com/ros-controls/ros2_controllers/issues/2476>`_) (`#2532 <https://github.com/ros-controls/ros2_controllers/issues/2532>`_)
+* Contributors: mergify[bot]
+
+4.41.0 (2026-07-01)
+-------------------
+* Test fix - call appropriate lifecycle transitions in controller tests: joint_state_broadcaster, joint_trajectory, omni_wheel_drive, bicycle_steering (backport `#2410 <https://github.com/ros-controls/ros2_controllers/issues/2410>`_) (`#2414 <https://github.com/ros-controls/ros2_controllers/issues/2414>`_)
+* Contributors: mergify[bot]
+
+4.40.1 (2026-05-12)
+-------------------
+* Suppress cppcheck errors from macros from version.h (backport `#2346 <https://github.com/ros-controls/ros2_controllers/issues/2346>`_) (`#2347 <https://github.com/ros-controls/ros2_controllers/issues/2347>`_)
+* fix(joint_state_broadcaster): suppress confusing warning for standard interfaces (backport `#2276 <https://github.com/ros-controls/ros2_controllers/issues/2276>`_) (`#2333 <https://github.com/ros-controls/ros2_controllers/issues/2333>`_)
+* Contributors: mergify[bot]
+
+4.40.0 (2026-04-22)
+-------------------
+
+4.39.0 (2026-04-04)
+-------------------
+* [JSB] Fix joint_state message corruption issue (backport `#2217 <https://github.com/ros-controls/ros2_controllers/issues/2217>`_) (`#2218 <https://github.com/ros-controls/ros2_controllers/issues/2218>`_)
+* Contributors: mergify[bot]
+
+4.38.0 (2026-03-12)
+-------------------
+* Add test to check JSB is not throwing when there is a boolean interface (backport `#2115 <https://github.com/ros-controls/ros2_controllers/issues/2115>`_) (`#2158 <https://github.com/ros-controls/ros2_controllers/issues/2158>`_)
+* Contributors: Noel Jiménez García
+
 4.37.0 (2026-02-03)
 -------------------
 

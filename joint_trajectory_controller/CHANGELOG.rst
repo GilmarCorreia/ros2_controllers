@@ -2,6 +2,49 @@
 Changelog for package joint_trajectory_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.42.1 (2026-08-12)
+-------------------
+
+4.42.0 (2026-08-10)
+-------------------
+* Use preallocated feedback from JTC to avoid heap allocation (backport `#2160 <https://github.com/ros-controls/ros2_controllers/issues/2160>`_) (`#2541 <https://github.com/ros-controls/ros2_controllers/issues/2541>`_)
+* Use new Command/State Interfaces API for tests (backport `#2476 <https://github.com/ros-controls/ros2_controllers/issues/2476>`_) (`#2532 <https://github.com/ros-controls/ros2_controllers/issues/2532>`_)
+* fix: prevent JTC segfault when continuous joint has no URDF limits (backport `#2523 <https://github.com/ros-controls/ros2_controllers/issues/2523>`_) (`#2529 <https://github.com/ros-controls/ros2_controllers/issues/2529>`_)
+* fix(joint-trajectory-controller): use active tolerances in update step (backport `#2101 <https://github.com/ros-controls/ros2_controllers/issues/2101>`_) (`#2511 <https://github.com/ros-controls/ros2_controllers/issues/2511>`_)
+* Refactor JTC command assignment for Kilted (backport `#2504 <https://github.com/ros-controls/ros2_controllers/issues/2504>`_) (`#2505 <https://github.com/ros-controls/ros2_controllers/issues/2505>`_)
+* Contributors: mergify[bot]
+
+4.41.0 (2026-07-01)
+-------------------
+* Deliver abort action result before destroying goal handle on preemption (backport `#2422 <https://github.com/ros-controls/ros2_controllers/issues/2422>`_) (`#2423 <https://github.com/ros-controls/ros2_controllers/issues/2423>`_)
+* Test fix - call appropriate lifecycle transitions in controller tests: joint_state_broadcaster, joint_trajectory, omni_wheel_drive, bicycle_steering (backport `#2410 <https://github.com/ros-controls/ros2_controllers/issues/2410>`_) (`#2414 <https://github.com/ros-controls/ros2_controllers/issues/2414>`_)
+* [JTC] Fix segfault when last trajectory segment is skipped (backport `#2359 <https://github.com/ros-controls/ros2_controllers/issues/2359>`_) (`#2364 <https://github.com/ros-controls/ros2_controllers/issues/2364>`_)
+* More general initialization of state from command (backport `#2294 <https://github.com/ros-controls/ros2_controllers/issues/2294>`_) (`#2356 <https://github.com/ros-controls/ros2_controllers/issues/2356>`_)
+* Contributors: mergify[bot]
+
+4.40.1 (2026-05-12)
+-------------------
+* Suppress cppcheck errors from macros from version.h (backport `#2346 <https://github.com/ros-controls/ros2_controllers/issues/2346>`_) (`#2347 <https://github.com/ros-controls/ros2_controllers/issues/2347>`_)
+* fix JTC userdoc YAML indentation and stray quote (backport `#2327 <https://github.com/ros-controls/ros2_controllers/issues/2327>`_) (`#2329 <https://github.com/ros-controls/ros2_controllers/issues/2329>`_)
+* Contributors: mergify[bot]
+
+4.40.0 (2026-04-22)
+-------------------
+* Fix segfault in jtc if joint name not in urdf (backport `#2321 <https://github.com/ros-controls/ros2_controllers/issues/2321>`_) (`#2323 <https://github.com/ros-controls/ros2_controllers/issues/2323>`_)
+* Contributors: mergify[bot]
+
+4.39.0 (2026-04-04)
+-------------------
+* Add decelerate to stop functionality when trajectory is canceled or preempted (backport `#2163 <https://github.com/ros-controls/ros2_controllers/issues/2163>`_) (`#2222 <https://github.com/ros-controls/ros2_controllers/issues/2222>`_)
+* Scaled jtc (backport `#1191 <https://github.com/ros-controls/ros2_controllers/issues/1191>`_) (`#2105 <https://github.com/ros-controls/ros2_controllers/issues/2105>`_)
+* GPL custom validator: Use tl_expected from libexpected-dev instead (backport `#2212 <https://github.com/ros-controls/ros2_controllers/issues/2212>`_) (`#2239 <https://github.com/ros-controls/ros2_controllers/issues/2239>`_)
+* Contributors: mergify[bot]
+
+4.38.0 (2026-03-12)
+-------------------
+* Consistently add <cmath> include with define for windows (backport `#2193 <https://github.com/ros-controls/ros2_controllers/issues/2193>`_) (`#2195 <https://github.com/ros-controls/ros2_controllers/issues/2195>`_)
+* Contributors: mergify[bot]
+
 4.37.0 (2026-02-03)
 -------------------
 

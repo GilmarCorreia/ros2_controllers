@@ -2,6 +2,37 @@
 Changelog for package omni_wheel_drive_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.42.1 (2026-08-12)
+-------------------
+
+4.42.0 (2026-08-10)
+-------------------
+* Use new Command/State Interfaces API for tests (backport `#2476 <https://github.com/ros-controls/ros2_controllers/issues/2476>`_) (`#2532 <https://github.com/ros-controls/ros2_controllers/issues/2532>`_)
+* Use new chainable controller exports API (backport `#2350 <https://github.com/ros-controls/ros2_controllers/issues/2350>`_) (`#2453 <https://github.com/ros-controls/ros2_controllers/issues/2453>`_)
+* Fix safety concerns with halt logic across controllers (backport `#2326 <https://github.com/ros-controls/ros2_controllers/issues/2326>`_) (`#2458 <https://github.com/ros-controls/ros2_controllers/issues/2458>`_)
+* Contributors: mergify[bot]
+
+4.41.0 (2026-07-01)
+-------------------
+* Test fix - call appropriate lifecycle transitions in controller tests: joint_state_broadcaster, joint_trajectory, omni_wheel_drive, bicycle_steering (backport `#2410 <https://github.com/ros-controls/ros2_controllers/issues/2410>`_) (`#2414 <https://github.com/ros-controls/ros2_controllers/issues/2414>`_)
+* Contributors: mergify[bot]
+
+4.40.1 (2026-05-12)
+-------------------
+
+4.40.0 (2026-04-22)
+-------------------
+
+4.39.0 (2026-04-04)
+-------------------
+* Remove ament linters (backport `#2267 <https://github.com/ros-controls/ros2_controllers/issues/2267>`_) (`#2270 <https://github.com/ros-controls/ros2_controllers/issues/2270>`_)
+* Contributors: mergify[bot]
+
+4.38.0 (2026-03-12)
+-------------------
+* Fix the teardown of the controller tests (backport `#2183 <https://github.com/ros-controls/ros2_controllers/issues/2183>`_) (`#2185 <https://github.com/ros-controls/ros2_controllers/issues/2185>`_)
+* Contributors: mergify[bot]
+
 4.37.0 (2026-02-03)
 -------------------
 

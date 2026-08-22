@@ -2,6 +2,37 @@
 Changelog for package steering_controllers_library
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.42.1 (2026-08-12)
+-------------------
+
+4.42.0 (2026-08-10)
+-------------------
+* fix(steering_controllers): handle NaN/Inf values in odometry update (backport `#2083 <https://github.com/ros-controls/ros2_controllers/issues/2083>`_) (`#2535 <https://github.com/ros-controls/ros2_controllers/issues/2535>`_)
+* Use new Command/State Interfaces API for tests (backport `#2476 <https://github.com/ros-controls/ros2_controllers/issues/2476>`_) (`#2532 <https://github.com/ros-controls/ros2_controllers/issues/2532>`_)
+* Use new chainable controller exports API (backport `#2350 <https://github.com/ros-controls/ros2_controllers/issues/2350>`_) (`#2453 <https://github.com/ros-controls/ros2_controllers/issues/2453>`_)
+* Fix safety concerns with halt logic across controllers (backport `#2326 <https://github.com/ros-controls/ros2_controllers/issues/2326>`_) (`#2458 <https://github.com/ros-controls/ros2_controllers/issues/2458>`_)
+* Contributors: mergify[bot]
+
+4.41.0 (2026-07-01)
+-------------------
+* Simplify reduce_wheel_speed_until_steering_reached logic (backport `#2396 <https://github.com/ros-controls/ros2_controllers/issues/2396>`_) (`#2427 <https://github.com/ros-controls/ros2_controllers/issues/2427>`_)
+* Test fix - call appropriate lifecycle transitions in controller tests: force_torque_sensor_broadcaster, chained_filter_controller, parallel_gripper_controller, steering_controllers_library (backport `#2382 <https://github.com/ros-controls/ros2_controllers/issues/2382>`_) (`#2393 <https://github.com/ros-controls/ros2_controllers/issues/2393>`_)
+* Contributors: mergify[bot]
+
+4.40.1 (2026-05-12)
+-------------------
+
+4.40.0 (2026-04-22)
+-------------------
+
+4.39.0 (2026-04-04)
+-------------------
+
+4.38.0 (2026-03-12)
+-------------------
+* Consistently add <cmath> include with define for windows (backport `#2193 <https://github.com/ros-controls/ros2_controllers/issues/2193>`_) (`#2195 <https://github.com/ros-controls/ros2_controllers/issues/2195>`_)
+* Contributors: mergify[bot]
+
 4.37.0 (2026-02-03)
 -------------------
 * Populate pose covariance correctly in steering controllers (backport `#2109 <https://github.com/ros-controls/ros2_controllers/issues/2109>`_) (`#2137 <https://github.com/ros-controls/ros2_controllers/issues/2137>`_)

@@ -2,6 +2,33 @@
 Changelog for package forward_command_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.42.1 (2026-08-12)
+-------------------
+
+4.42.0 (2026-08-10)
+-------------------
+* Use new Command/State Interfaces API for tests (backport `#2476 <https://github.com/ros-controls/ros2_controllers/issues/2476>`_) (`#2532 <https://github.com/ros-controls/ros2_controllers/issues/2532>`_)
+* Contributors: mergify[bot]
+
+4.41.0 (2026-07-01)
+-------------------
+* Test fix - call appropriate lifecycle transitions in controller tests: forward_command, mecanum_drive, range_sensor, imu_sensor (backport `#2406 <https://github.com/ros-controls/ros2_controllers/issues/2406>`_) (`#2407 <https://github.com/ros-controls/ros2_controllers/issues/2407>`_)
+* Contributors: mergify[bot]
+
+4.40.1 (2026-05-12)
+-------------------
+
+4.40.0 (2026-04-22)
+-------------------
+
+4.39.0 (2026-04-04)
+-------------------
+
+4.38.0 (2026-03-12)
+-------------------
+* Bump version of pre-commit hooks (backport `#2188 <https://github.com/ros-controls/ros2_controllers/issues/2188>`_) (`#2190 <https://github.com/ros-controls/ros2_controllers/issues/2190>`_)
+* Contributors: mergify[bot]
+
 4.37.0 (2026-02-03)
 -------------------
 

@@ -14,9 +14,13 @@
 
 #include <cstddef>
 
+#include <atomic>
 #include <functional>
 #include <memory>
+#include <shared_mutex>
 #include <string>
+#include <thread>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -41,12 +45,6 @@ using testing::ElementsAreArray;
 using testing::IsEmpty;
 using testing::SizeIs;
 
-namespace
-{
-constexpr auto NODE_SUCCESS = controller_interface::CallbackReturn::SUCCESS;
-constexpr auto NODE_ERROR = controller_interface::CallbackReturn::ERROR;
-}  // namespace
-
 void JointStateBroadcasterTest::SetUpTestCase() { rclcpp::init(0, nullptr); }
 
 void JointStateBroadcasterTest::TearDownTestCase() { rclcpp::shutdown(); }
@@ -55,6 +53,38 @@ void JointStateBroadcasterTest::SetUp()
 {
   // initialize broadcaster
   state_broadcaster_ = std::make_unique<FriendJointStateBroadcaster>();
+
+  joint_1_pos_state_ =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[0], interface_names_[0]);
+  std::ignore = joint_1_pos_state_->set_value(joint_values_[0]);
+  joint_2_pos_state_ =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[1], interface_names_[0]);
+  std::ignore = joint_2_pos_state_->set_value(joint_values_[1]);
+  joint_3_pos_state_ =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[2], interface_names_[0]);
+  std::ignore = joint_3_pos_state_->set_value(joint_values_[2]);
+  joint_1_vel_state_ =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[0], interface_names_[1]);
+  std::ignore = joint_1_vel_state_->set_value(joint_values_[0]);
+  joint_2_vel_state_ =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[1], interface_names_[1]);
+  std::ignore = joint_2_vel_state_->set_value(joint_values_[1]);
+  joint_3_vel_state_ =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[2], interface_names_[1]);
+  std::ignore = joint_3_vel_state_->set_value(joint_values_[2]);
+  joint_1_eff_state_ =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[0], interface_names_[2]);
+  std::ignore = joint_1_eff_state_->set_value(joint_values_[0]);
+  joint_2_eff_state_ =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[1], interface_names_[2]);
+  std::ignore = joint_2_eff_state_->set_value(joint_values_[1]);
+  joint_3_eff_state_ =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[2], interface_names_[2]);
+  std::ignore = joint_3_eff_state_->set_value(joint_values_[2]);
+
+  joint_X_custom_state =
+    std::make_shared<hardware_interface::StateInterface>(joint_names_[0], custom_interface_name_);
+  std::ignore = joint_X_custom_state->set_value(custom_joint_value_);
 }
 
 void JointStateBroadcasterTest::TearDown() { state_broadcaster_.reset(nullptr); }
@@ -169,9 +199,9 @@ TEST_F(JointStateBroadcasterTest, ActivateEmptyTest)
 
   SetUpStateBroadcaster();
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = joint_names_.size();
 
@@ -219,10 +249,11 @@ TEST_F(JointStateBroadcasterTest, ActivateEmptyWithoutDynamicJointStatesPublishe
   ASSERT_FALSE(state_broadcaster_->dynamic_joint_state_publisher_);
 
   SetUpStateBroadcaster({}, {}, {rclcpp::Parameter("publish_dynamic_joint_states", false)});
-  // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  // configure ok
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
+
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = joint_names_.size();
 
@@ -256,9 +287,9 @@ TEST_F(JointStateBroadcasterTest, ReactivateTheControllerWithDifferentInterfaces
 
   SetUpStateBroadcaster();
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = joint_names_.size();
 
@@ -300,11 +331,11 @@ TEST_F(JointStateBroadcasterTest, ReactivateTheControllerWithDifferentInterfaces
 
   // Now deactivate and activate with only 2 set of joints and interfaces (to create as in one of
   // the interface is unavailable)
-  ASSERT_EQ(state_broadcaster_->on_deactivate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(deactivate_succeeds(state_broadcaster_));
   const std::vector<std::string> JOINT_NAMES = {"joint1", "joint2"};
   assign_state_interfaces(JOINT_NAMES, interface_names_);
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS_WITH_ONE_DEACTIVATED = JOINT_NAMES.size();
 
@@ -353,9 +384,9 @@ TEST_F(JointStateBroadcasterTest, ActivateTestWithoutJointsParameter)
   SetUpStateBroadcaster(JOINT_NAMES, IF_NAMES);
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = joint_names_.size();
 
@@ -404,9 +435,9 @@ TEST_F(JointStateBroadcasterTest, ActivateTestWithoutJointsParameterInvalidURDF)
   assign_state_interfaces(JOINT_NAMES, IF_NAMES);
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = joint_names_.size();
 
@@ -458,9 +489,9 @@ TEST_F(JointStateBroadcasterTest, ActivateTestWithoutJointsParameterWithRobotDes
   assign_state_interfaces(JOINT_NAMES, IF_NAMES);
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = joint_in_urdf.size();
 
@@ -511,9 +542,9 @@ TEST_F(JointStateBroadcasterTest, ActivateTestWithJointsAndNoInterfaces)
   assign_state_interfaces(JOINT_NAMES, IF_NAMES);
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = joint_in_urdf.size();
 
@@ -563,9 +594,9 @@ TEST_F(JointStateBroadcasterTest, ActivateTestWithJointsAndInterfaces)
   assign_state_interfaces(JOINT_NAMES, IF_NAMES);
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = JOINT_NAMES.size();
 
@@ -605,9 +636,9 @@ TEST_F(JointStateBroadcasterTest, ActivateTestWithoutInterfacesParameter)
   SetUpStateBroadcaster(JOINT_NAMES, IF_NAMES);
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = joint_names_.size();
 
@@ -655,9 +686,9 @@ TEST_F(JointStateBroadcasterTest, ActivateDeactivateTestTwoJointsOneInterface)
   SetUpStateBroadcaster(JOINT_NAMES, IF_NAMES);
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = JOINT_NAMES.size();
 
@@ -701,7 +732,8 @@ TEST_F(JointStateBroadcasterTest, ActivateDeactivateTestTwoJointsOneInterface)
     dynamic_joint_state_msg.interface_values[1].interface_names, ElementsAreArray(IF_NAMES));
 
   // deactivate
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(deactivate_succeeds(state_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   // check interface configuration
   cmd_if_conf = state_broadcaster_->command_interface_configuration();
@@ -720,9 +752,9 @@ TEST_F(JointStateBroadcasterTest, ActivateTestOneJointTwoInterfaces)
   SetUpStateBroadcaster(JOINT_NAMES, IF_NAMES);
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = JOINT_NAMES.size();
 
@@ -772,10 +804,25 @@ TEST_F(JointStateBroadcasterTest, ActivateTestTwoJointTwoInterfacesAllMissing)
   // assign_state_interfaces(JOINT_NAMES, {interface_names_[2]});
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
   // is none of requested interfaces do not exist, the controller will not be activated
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_ERROR);
+  try
+  {
+    activate_succeeds(state_broadcaster_);
+    FAIL() << "Expected std::runtime_error to be thrown";
+  }
+  catch (const std::runtime_error & e)
+  {
+    EXPECT_STREQ(
+      e.what(),
+      "Unexpected controller state in activate_succeeds: 1");  // State goes to ErrorProcessing then
+                                                               // Unconfigured(1)
+  }
+  catch (...)
+  {
+    FAIL() << "Expected std::runtime_error, but a different exception was thrown";
+  }
 }
 
 TEST_F(JointStateBroadcasterTest, ActivateTestTwoJointTwoInterfacesOneMissing)
@@ -796,10 +843,10 @@ TEST_F(JointStateBroadcasterTest, ActivateTestTwoJointTwoInterfacesOneMissing)
   state_broadcaster_->assign_interfaces({}, std::move(state_ifs));
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
   // here a warning output is expected!
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = JOINT_NAMES.size();
 
@@ -849,9 +896,9 @@ TEST_F(JointStateBroadcasterTest, TestCustomInterfaceWithoutMapping)
   SetUpStateBroadcaster(JOINT_NAMES, IF_NAMES);
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = JOINT_NAMES.size();
 
@@ -895,9 +942,9 @@ TEST_F(JointStateBroadcasterTest, TestCustomInterfaceMapping)
       std::string("map_interface_to_joint_state.") + HW_IF_POSITION, custom_interface_name_)});
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   const size_t NUM_JOINTS = JOINT_NAMES.size();
 
@@ -938,6 +985,52 @@ TEST_F(JointStateBroadcasterTest, TestCustomInterfaceMapping)
   // publishers initialized
   ASSERT_TRUE(state_broadcaster_->joint_state_publisher_);
   ASSERT_TRUE(state_broadcaster_->dynamic_joint_state_publisher_);
+}
+
+TEST_F(JointStateBroadcasterTest, TestCustomInterfaceMappingIgnoredWhenVelocityInterfaceIsRequested)
+{
+  constexpr auto custom_velocity_interface = "derived_velocity";
+  const std::vector<std::string> JOINT_NAMES = {joint_names_[0]};
+  const std::vector<std::string> IF_NAMES = {HW_IF_VELOCITY};
+  SetUpStateBroadcaster(
+    JOINT_NAMES, IF_NAMES,
+    {rclcpp::Parameter(
+      std::string("map_interface_to_joint_state.") + HW_IF_VELOCITY, custom_velocity_interface)});
+
+  // configure ok; a warning is expected because the custom velocity mapping is ignored
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
+
+  const auto velocity_mapping =
+    state_broadcaster_->map_interface_to_joint_state_.find(HW_IF_VELOCITY);
+  ASSERT_NE(velocity_mapping, state_broadcaster_->map_interface_to_joint_state_.end());
+  EXPECT_EQ(velocity_mapping->second, HW_IF_VELOCITY);
+  EXPECT_EQ(state_broadcaster_->map_interface_to_joint_state_.count(custom_velocity_interface), 0u);
+
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
+
+  const size_t NUM_JOINTS = JOINT_NAMES.size();
+
+  // check interface configuration
+  auto cmd_if_conf = state_broadcaster_->command_interface_configuration();
+  ASSERT_THAT(cmd_if_conf.names, IsEmpty());
+  EXPECT_EQ(cmd_if_conf.type, controller_interface::interface_configuration_type::NONE);
+  auto state_if_conf = state_broadcaster_->state_interface_configuration();
+  ASSERT_THAT(state_if_conf.names, SizeIs(JOINT_NAMES.size() * IF_NAMES.size()));
+  EXPECT_EQ(state_if_conf.type, controller_interface::interface_configuration_type::INDIVIDUAL);
+
+  // joint state initialized
+  const auto & joint_state_msg = state_broadcaster_->joint_state_msg_;
+  ASSERT_EQ(joint_state_msg.header.frame_id, frame_id_);
+  ASSERT_THAT(joint_state_msg.name, ElementsAreArray(JOINT_NAMES));
+  ASSERT_THAT(joint_state_msg.position, SizeIs(NUM_JOINTS));
+  ASSERT_TRUE(std::isnan(joint_state_msg.position[0]));
+  ASSERT_THAT(joint_state_msg.velocity, SizeIs(NUM_JOINTS));
+  ASSERT_TRUE(std::isnan(joint_state_msg.velocity[0]));
+  ASSERT_THAT(joint_state_msg.effort, SizeIs(NUM_JOINTS));
+  ASSERT_TRUE(std::isnan(joint_state_msg.effort[0]));
+
+  // publisher initialized
+  ASSERT_TRUE(state_broadcaster_->joint_state_publisher_);
 }
 
 TEST_F(JointStateBroadcasterTest, TestCustomInterfaceMappingUpdate)
@@ -989,9 +1082,8 @@ TEST_F(JointStateBroadcasterTest, UpdateTest)
 {
   SetUpStateBroadcaster();
 
-  auto node_state = state_broadcaster_->configure();
-  node_state = state_broadcaster_->get_node()->activate();
-  ASSERT_EQ(node_state.id(), lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
   ASSERT_EQ(
     state_broadcaster_->update(rclcpp::Time(0), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
@@ -1016,51 +1108,87 @@ TEST_F(JointStateBroadcasterTest, UpdatePerformanceTest)
     const auto joint_name = "joint_" + std::to_string(joint);
 
     // standard
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "position", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "velocity", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "effort", &custom_joint_value_});
+    auto state_position =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "position");
+    std::ignore = state_position->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_position);
+    auto state_velocity =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "velocity");
+    std::ignore = state_velocity->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_velocity);
+    auto state_effort = std::make_shared<hardware_interface::StateInterface>(joint_name, "effort");
+    std::ignore = state_effort->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_effort);
 
     // non standard
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "mode", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "absolute_position", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "acceleration", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "current", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "torque", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "force", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "temperature_board", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "temperature_motor", &custom_joint_value_});
+    auto state_mode = std::make_shared<hardware_interface::StateInterface>(joint_name, "mode");
+    std::ignore = state_mode->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_mode);
+    auto state_absolute_position =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "absolute_position");
+    std::ignore = state_absolute_position->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_absolute_position);
+    auto state_acceleration =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "acceleration");
+    std::ignore = state_acceleration->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_acceleration);
+    auto state_current =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "current");
+    std::ignore = state_current->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_current);
+    auto state_torque = std::make_shared<hardware_interface::StateInterface>(joint_name, "torque");
+    std::ignore = state_torque->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_torque);
+    auto state_force = std::make_shared<hardware_interface::StateInterface>(joint_name, "force");
+    std::ignore = state_force->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_force);
+    auto state_temperature_board =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "temperature_board");
+    std::ignore = state_temperature_board->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_temperature_board);
+    auto state_temperature_motor =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "temperature_motor");
+    std::ignore = state_temperature_motor->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_temperature_motor);
 
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "position.kd", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "position.ki", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "position.kp", &custom_joint_value_});
+    auto state_position_kd =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "position.kd");
+    std::ignore = state_position_kd->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_position_kd);
+    auto state_position_ki =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "position.ki");
+    std::ignore = state_position_ki->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_position_ki);
+    auto state_position_kp =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "position.kp");
+    std::ignore = state_position_kp->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_position_kp);
 
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "velocity.kd", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "velocity.ki", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "velocity.kp", &custom_joint_value_});
+    auto state_velocity_kd =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "velocity.kd");
+    std::ignore = state_velocity_kd->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_velocity_kd);
+    auto state_velocity_ki =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "velocity.ki");
+    std::ignore = state_velocity_ki->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_velocity_ki);
+    auto state_velocity_kp =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "velocity.kp");
+    std::ignore = state_velocity_kp->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_velocity_kp);
 
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "current.kd", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "current.ki", &custom_joint_value_});
-    test_interfaces_.emplace_back(
-      hardware_interface::StateInterface{joint_name, "current.kp", &custom_joint_value_});
+    auto state_current_kd =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "current.kd");
+    std::ignore = state_current_kd->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_current_kd);
+    auto state_current_ki =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "current.ki");
+    std::ignore = state_current_ki->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_current_ki);
+    auto state_current_kp =
+      std::make_shared<hardware_interface::StateInterface>(joint_name, "current.kp");
+    std::ignore = state_current_kp->set_value(custom_joint_value_);
+    test_interfaces_.emplace_back(state_current_kp);
   }
 
   RCLCPP_INFO(
@@ -1075,9 +1203,8 @@ TEST_F(JointStateBroadcasterTest, UpdatePerformanceTest)
 
   state_broadcaster_->assign_interfaces({}, std::move(state_interfaces));
 
-  auto node_state = state_broadcaster_->configure();
-  node_state = state_broadcaster_->get_node()->activate();
-  ASSERT_EQ(node_state.id(), lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   if (!realtime_tools::configure_sched_fifo(50))
   {
@@ -1118,11 +1245,8 @@ TEST_F(JointStateBroadcasterTest, UpdatePerformanceTest)
 void JointStateBroadcasterTest::activate_and_get_joint_state_message(
   const std::string & topic, sensor_msgs::msg::JointState & joint_state_msg)
 {
-  auto node_state = state_broadcaster_->configure();
-  ASSERT_EQ(node_state.id(), lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE);
-
-  node_state = state_broadcaster_->get_node()->activate();
-  ASSERT_EQ(node_state.id(), lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   sensor_msgs::msg::JointState::SharedPtr received_msg;
   rclcpp::Node test_node("test_node");
@@ -1283,9 +1407,9 @@ TEST_F(JointStateBroadcasterTest, ExtraJointStatePublishTest)
   SetUpStateBroadcaster({}, {}, {rclcpp::Parameter("extra_joints", extra_joint_names)});
 
   // configure ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
 
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   std::vector<std::string> all_joint_names = joint_names_;
   all_joint_names.insert(all_joint_names.end(), extra_joint_names.begin(), extra_joint_names.end());
@@ -1318,8 +1442,8 @@ TEST_F(JointStateBroadcasterTest, NoThrowWithBooleanInterfaceTest)
   state_broadcaster_->assign_interfaces({}, std::move(state_ifs));
 
   // configure and activate ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   // update should not throw
   ASSERT_NO_THROW(
@@ -1346,8 +1470,8 @@ TEST_F(JointStateBroadcasterTest, NoThrowWithBooleanAndDoubleInterfaceTest)
   state_broadcaster_->assign_interfaces({}, std::move(state_ifs));
 
   // configure and activate ok
-  ASSERT_EQ(state_broadcaster_->on_configure(rclcpp_lifecycle::State()), NODE_SUCCESS);
-  ASSERT_EQ(state_broadcaster_->on_activate(rclcpp_lifecycle::State()), NODE_SUCCESS);
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
 
   // update should not throw
   ASSERT_NO_THROW(
@@ -1368,4 +1492,80 @@ TEST_F(JointStateBroadcasterTest, NoThrowWithBooleanAndDoubleInterfaceTest)
   ASSERT_THAT(state_broadcaster_->joint_state_msg_.position, SizeIs(1));
   ASSERT_THAT(state_broadcaster_->joint_state_msg_.velocity, SizeIs(1));
   ASSERT_THAT(state_broadcaster_->joint_state_msg_.effort, SizeIs(1));
+}
+
+// Regression test: when a double interface temporarily fails to be read
+// (get_optional returns nullopt as it is unable to lock), map_index must still advance so that
+// subsequent interfaces are written to the correct mapped_values_ indexes.
+//
+// Without the fix, if state_interfaces_[i] returns nullopt, the next interface's value is
+// written into index i instead of index i+1, corrupting all subsequent joint state values.
+TEST_F(JointStateBroadcasterTest, CorrectMappingWhenInterfaceReadFailsTest)
+{
+  init_broadcaster_and_set_parameters(
+    "", {joint_names_[0], joint_names_[1], joint_names_[2]}, {HW_IF_POSITION});
+
+  std::vector<LoanedStateInterface> state_ifs;
+  state_ifs.emplace_back(joint_1_pos_state_);
+  state_ifs.emplace_back(joint_2_pos_state_);
+  state_ifs.emplace_back(joint_3_pos_state_);
+  state_broadcaster_->assign_interfaces({}, std::move(state_ifs));
+
+  ASSERT_TRUE(configure_succeeds(state_broadcaster_));
+  ASSERT_TRUE(activate_succeeds(state_broadcaster_));
+
+  ASSERT_THAT(
+    state_broadcaster_->joint_state_msg_.name,
+    ElementsAreArray({joint_names_[0], joint_names_[1], joint_names_[2]}));
+
+  /// Simulate a temporarily-unavailable first interface
+  // Hold an exclusive lock on state_interfaces_[0]'s mutex from a helper thread.
+  // While the lock is held, get_optional(0) on state_interfaces_[0] cannot acquire the
+  // shared lock and returns nullopt.
+  std::atomic<bool> lock_held{false};
+  std::atomic<bool> release_lock{false};
+
+  std::thread locker(
+    [&]()
+    {
+      // Acquire exclusive lock on the first interface's handle mutex
+      std::unique_lock<std::shared_mutex> lk(joint_1_pos_state_->get_mutex());
+      lock_held.store(true, std::memory_order_release);
+      // Hold it until the main thread finishes its update() call
+      while (!release_lock.load(std::memory_order_acquire))
+      {
+        std::this_thread::yield();
+      }
+    });
+
+  // Wait until the locker thread actually owns the mutex
+  while (!lock_held.load(std::memory_order_acquire))
+  {
+    std::this_thread::yield();
+  }
+
+  // Call update(): joint1/position read will return nullopt (lock held by locker thread).
+  ASSERT_NO_THROW(
+    state_broadcaster_->update(rclcpp::Time(0), rclcpp::Duration::from_seconds(0.01)));
+
+  release_lock.store(true, std::memory_order_release);
+  locker.join();
+
+  const auto & names = state_broadcaster_->joint_state_msg_.name;
+  const auto & pos = state_broadcaster_->joint_state_msg_.position;
+  ASSERT_EQ(pos.size(), 3u);
+
+  // joint1 was not readable, its index must NOT contain joint2's value (2.2).
+  // (It will hold the initial NaN or any prior value, not 2.2.)
+  EXPECT_EQ(names[0], joint_names_[0]);
+  EXPECT_NE(pos[0], joint_values_[1])
+    << "joint1's position slot was overwritten with joint2's value — map_index bug is present";
+
+  EXPECT_EQ(names[1], joint_names_[1]);
+  EXPECT_DOUBLE_EQ(pos[1], joint_values_[1])
+    << "joint2's position slot has wrong value — map_index was shifted by the nullopt";
+
+  EXPECT_EQ(names[2], joint_names_[2]);
+  EXPECT_DOUBLE_EQ(pos[2], joint_values_[2])
+    << "joint3's position slot has wrong value — map_index was shifted by the nullopt";
 }

@@ -16,9 +16,11 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
+#include "controller_interface/test_utils.hpp"
 #include "diff_drive_controller/diff_drive_controller.hpp"
 #include "hardware_interface/loaned_command_interface.hpp"
 #include "hardware_interface/loaned_state_interface.hpp"
@@ -27,7 +29,10 @@
 #include "rclcpp/executor.hpp"
 #include "rclcpp/executors.hpp"
 
-using CallbackReturn = controller_interface::CallbackReturn;
+using controller_interface::activate_succeeds;
+using controller_interface::cleanup_succeeds;
+using controller_interface::configure_succeeds;
+using controller_interface::deactivate_succeeds;
 using hardware_interface::HW_IF_POSITION;
 using hardware_interface::HW_IF_VELOCITY;
 using hardware_interface::LoanedCommandInterface;
@@ -45,6 +50,7 @@ class TestableDiffDriveController : public diff_drive_controller::DiffDriveContr
 {
 public:
   using DiffDriveController::DiffDriveController;
+  using DiffDriveController::odometry_;
 
   /**
    * @brief wait_for_twist block until a new twist is received.
@@ -99,6 +105,34 @@ protected:
     pub_node = std::make_shared<rclcpp::Node>("velocity_publisher");
     velocity_publisher = pub_node->create_publisher<geometry_msgs::msg::TwistStamped>(
       controller_name + "/cmd_vel", rclcpp::SystemDefaultsQoS());
+
+    left_wheel_pos_state_ =
+      std::make_shared<hardware_interface::StateInterface>(left_wheel_names[0], HW_IF_POSITION);
+    std::ignore = left_wheel_pos_state_->set_value(position_values_[0]);
+    right_wheel_pos_state_ =
+      std::make_shared<hardware_interface::StateInterface>(right_wheel_names[0], HW_IF_POSITION);
+    std::ignore = right_wheel_pos_state_->set_value(position_values_[1]);
+    left_wheel_vel_state_ =
+      std::make_shared<hardware_interface::StateInterface>(left_wheel_names[0], HW_IF_VELOCITY);
+    std::ignore = left_wheel_vel_state_->set_value(velocity_values_[0]);
+    right_wheel_vel_state_ =
+      std::make_shared<hardware_interface::StateInterface>(right_wheel_names[0], HW_IF_VELOCITY);
+    std::ignore = right_wheel_vel_state_->set_value(velocity_values_[1]);
+    left_wheel_vel_cmd_ =
+      std::make_shared<hardware_interface::CommandInterface>(left_wheel_names[0], HW_IF_VELOCITY);
+    std::ignore = left_wheel_vel_cmd_->set_value(velocity_values_[0]);
+    right_wheel_vel_cmd_ =
+      std::make_shared<hardware_interface::CommandInterface>(right_wheel_names[0], HW_IF_VELOCITY);
+    std::ignore = right_wheel_vel_cmd_->set_value(velocity_values_[1]);
+  }
+
+  void TearDown() override
+  {
+    // Reset the controller before the fixture is destroyed to ensure the controller's
+    // shutdown transition (which clears loaned interfaces) runs while the underlying
+    // StateInterface/CommandInterface objects are still alive. LoanedStateInterface stores
+    // a const reference (not a shared_ptr), so destruction order matters.
+    controller_.reset();
   }
 
   static void TearDownTestCase() { rclcpp::shutdown(); }
@@ -159,10 +193,11 @@ protected:
     state_ifs.emplace_back(right_wheel_pos_state_);
 
     std::vector<LoanedCommandInterface> command_ifs;
-    command_ifs.emplace_back(left_wheel_vel_cmd_);
-    command_ifs.emplace_back(right_wheel_vel_cmd_);
+    command_ifs.emplace_back(left_wheel_vel_cmd_, nullptr);
+    command_ifs.emplace_back(right_wheel_vel_cmd_, nullptr);
 
     controller_->assign_interfaces(std::move(command_ifs), std::move(state_ifs));
+    controller_->export_reference_interfaces();
   }
 
   void assignResourcesVelFeedback()
@@ -172,19 +207,21 @@ protected:
     state_ifs.emplace_back(right_wheel_vel_state_);
 
     std::vector<LoanedCommandInterface> command_ifs;
-    command_ifs.emplace_back(left_wheel_vel_cmd_);
-    command_ifs.emplace_back(right_wheel_vel_cmd_);
+    command_ifs.emplace_back(left_wheel_vel_cmd_, nullptr);
+    command_ifs.emplace_back(right_wheel_vel_cmd_, nullptr);
 
     controller_->assign_interfaces(std::move(command_ifs), std::move(state_ifs));
+    controller_->export_reference_interfaces();
   }
 
   void assignResourcesNoFeedback()
   {
     std::vector<LoanedCommandInterface> command_ifs;
-    command_ifs.emplace_back(left_wheel_vel_cmd_);
-    command_ifs.emplace_back(right_wheel_vel_cmd_);
+    command_ifs.emplace_back(left_wheel_vel_cmd_, nullptr);
+    command_ifs.emplace_back(right_wheel_vel_cmd_, nullptr);
 
     controller_->assign_interfaces(std::move(command_ifs), {});
+    controller_->export_reference_interfaces();
   }
 
   controller_interface::return_type InitController(
@@ -219,20 +256,14 @@ protected:
   std::unique_ptr<TestableDiffDriveController> controller_;
 
   std::vector<double> position_values_ = {0.1, 0.2};
-  std::vector<double> velocity_values_ = {0.01, 0.02};
+  const std::vector<double> velocity_values_ = {0.01, 0.02};
 
-  hardware_interface::StateInterface left_wheel_pos_state_{
-    left_wheel_names[0], HW_IF_POSITION, &position_values_[0]};
-  hardware_interface::StateInterface right_wheel_pos_state_{
-    right_wheel_names[0], HW_IF_POSITION, &position_values_[1]};
-  hardware_interface::StateInterface left_wheel_vel_state_{
-    left_wheel_names[0], HW_IF_VELOCITY, &velocity_values_[0]};
-  hardware_interface::StateInterface right_wheel_vel_state_{
-    right_wheel_names[0], HW_IF_VELOCITY, &velocity_values_[1]};
-  hardware_interface::CommandInterface left_wheel_vel_cmd_{
-    left_wheel_names[0], HW_IF_VELOCITY, &velocity_values_[0]};
-  hardware_interface::CommandInterface right_wheel_vel_cmd_{
-    right_wheel_names[0], HW_IF_VELOCITY, &velocity_values_[1]};
+  hardware_interface::StateInterface::SharedPtr left_wheel_pos_state_;
+  hardware_interface::StateInterface::SharedPtr right_wheel_pos_state_;
+  hardware_interface::StateInterface::SharedPtr left_wheel_vel_state_;
+  hardware_interface::StateInterface::SharedPtr right_wheel_vel_state_;
+  hardware_interface::CommandInterface::SharedPtr left_wheel_vel_cmd_;
+  hardware_interface::CommandInterface::SharedPtr right_wheel_vel_cmd_;
 
   rclcpp::Node::SharedPtr pub_node;
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr velocity_publisher;
@@ -265,7 +296,7 @@ TEST_F(TestDiffDriveController, configure_fails_with_mismatching_wheel_side_size
     InitController(left_wheel_names, {right_wheel_names[0], "extra_wheel"}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::ERROR);
+  ASSERT_FALSE(configure_succeeds(controller_));
 }
 
 TEST_F(
@@ -274,7 +305,7 @@ TEST_F(
 {
   ASSERT_EQ(InitController(), controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
 
   auto state_if_conf = controller_->state_interface_configuration();
   ASSERT_THAT(state_if_conf.names, SizeIs(left_wheel_names.size() + right_wheel_names.size()));
@@ -294,7 +325,7 @@ TEST_F(
       {rclcpp::Parameter("open_loop", rclcpp::ParameterValue(true))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
 
   auto state_if_conf = controller_->state_interface_configuration();
   ASSERT_THAT(state_if_conf.names, SizeIs(0));
@@ -319,7 +350,7 @@ TEST_F(TestDiffDriveController, configure_succeeds_tf_test_prefix_false_no_names
        rclcpp::Parameter("base_frame_id", rclcpp::ParameterValue(base_link_id))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
 
   /* tf_frame_prefix_enable is false so no modifications to the frame id's */
   ASSERT_EQ(controller_->odometry_message_.header.frame_id, odom_id);
@@ -341,7 +372,7 @@ TEST_F(TestDiffDriveController, configure_succeeds_tf_test_prefix_true_no_namesp
        rclcpp::Parameter("base_frame_id", rclcpp::ParameterValue(base_link_id))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
 
   /* tf_frame_prefix_enable is true and frame_prefix is not blank so should be appended to the frame
    * id's */
@@ -364,7 +395,7 @@ TEST_F(TestDiffDriveController, configure_succeeds_tf_blank_prefix_true_no_names
        rclcpp::Parameter("base_frame_id", rclcpp::ParameterValue(base_link_id))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
 
   /* tf_frame_prefix_enable is true but frame_prefix is blank so should not be appended to the frame
    * id's */
@@ -390,7 +421,7 @@ TEST_F(TestDiffDriveController, configure_succeeds_tf_test_prefix_false_set_name
       test_namespace),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
 
   /* tf_frame_prefix_enable is false so no modifications to the frame id's */
   ASSERT_EQ(controller_->odometry_message_.header.frame_id, odom_id);
@@ -415,7 +446,7 @@ TEST_F(TestDiffDriveController, configure_succeeds_tf_test_prefix_true_set_names
       test_namespace),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
 
   /* tf_frame_prefix_enable is true and frame_prefix is not blank so should be appended to the frame
    * id's instead of the namespace*/
@@ -440,7 +471,7 @@ TEST_F(TestDiffDriveController, configure_succeeds_tf_blank_prefix_true_set_name
       test_namespace),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
 
   std::string ns_prefix = test_namespace.erase(0, 1) + "/";
   /* tf_frame_prefix_enable is true but frame_prefix is blank so namespace should be appended to the
@@ -453,8 +484,9 @@ TEST_F(TestDiffDriveController, activate_fails_without_resources_assigned)
 {
   ASSERT_EQ(InitController(), controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
-  ASSERT_EQ(controller_->on_activate(rclcpp_lifecycle::State()), CallbackReturn::ERROR);
+  ASSERT_TRUE(configure_succeeds(controller_));
+
+  ASSERT_THROW(activate_succeeds(controller_), std::runtime_error);
 }
 
 TEST_F(TestDiffDriveController, activate_succeeds_with_pos_resources_assigned)
@@ -462,9 +494,11 @@ TEST_F(TestDiffDriveController, activate_succeeds_with_pos_resources_assigned)
   ASSERT_EQ(InitController(), controller_interface::return_type::OK);
 
   // We implicitly test that by default position feedback is required
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesPosFeedback();
-  ASSERT_EQ(controller_->on_activate(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+
+  ASSERT_TRUE(activate_succeeds(controller_));
 }
 
 TEST_F(TestDiffDriveController, activate_succeeds_with_vel_resources_assigned)
@@ -475,9 +509,11 @@ TEST_F(TestDiffDriveController, activate_succeeds_with_vel_resources_assigned)
       {rclcpp::Parameter("position_feedback", rclcpp::ParameterValue(false))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesVelFeedback();
-  ASSERT_EQ(controller_->on_activate(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+
+  ASSERT_TRUE(activate_succeeds(controller_));
 }
 
 TEST_F(TestDiffDriveController, activate_succeeds_with_open_loop_assigned)
@@ -488,9 +524,9 @@ TEST_F(TestDiffDriveController, activate_succeeds_with_open_loop_assigned)
       {rclcpp::Parameter("open_loop", rclcpp::ParameterValue(true))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
   assignResourcesNoFeedback();
-  ASSERT_EQ(controller_->on_activate(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(activate_succeeds(controller_));
 }
 
 TEST_F(TestDiffDriveController, test_speed_limiter)
@@ -522,12 +558,12 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
 
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(controller_->get_node()->get_node_base_interface());
-  auto state = controller_->configure();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
+
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesPosFeedback();
 
-  state = controller_->get_node()->activate();
-  ASSERT_EQ(State::PRIMARY_STATE_ACTIVE, state.id());
+  ASSERT_TRUE(activate_succeeds(controller_));
 
   waitForSetup(executor);
 
@@ -542,8 +578,8 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
     ASSERT_EQ(
       controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
       controller_interface::return_type::OK);
-    EXPECT_NEAR(0.0, left_wheel_vel_cmd_.get_optional().value(), 1e-3);
-    EXPECT_NEAR(0.0, right_wheel_vel_cmd_.get_optional().value(), 1e-3);
+    EXPECT_NEAR(0.0, left_wheel_vel_cmd_->get_optional().value(), 1e-3);
+    EXPECT_NEAR(0.0, right_wheel_vel_cmd_->get_optional().value(), 1e-3);
   }
 
   const double dt = 0.001;
@@ -563,18 +599,18 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
       ASSERT_EQ(
         controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(dt)),
         controller_interface::return_type::OK);
-      EXPECT_GT(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value())
+      EXPECT_GT(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value())
         << "at t: " << i * dt
         << "s, but this angular velocity should only be achieved at t: " << time_acc;
-      EXPECT_GT(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value())
+      EXPECT_GT(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value())
         << "at t: " << i * dt
         << "s, but this angular velocity should only be achieved at t: " << time_acc;
     }
     ASSERT_EQ(
       controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(dt)),
       controller_interface::return_type::OK);
-    EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value(), 1e-3);
-    EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value(), 1e-3);
+    EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value(), 1e-3);
+    EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value(), 1e-3);
 
     // wait for the speed limiter to fill the queue
     for (int i = 0; i < 3; ++i)
@@ -582,8 +618,8 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
       ASSERT_EQ(
         controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
         controller_interface::return_type::OK);
-      EXPECT_EQ(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value());
-      EXPECT_EQ(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value());
+      EXPECT_EQ(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value());
+      EXPECT_EQ(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value());
     }
   }
 
@@ -600,18 +636,18 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
       ASSERT_EQ(
         controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(dt)),
         controller_interface::return_type::OK);
-      EXPECT_LT(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value())
+      EXPECT_LT(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value())
         << "at t: " << i * dt
         << "s, but this angular velocity should only be achieved at t: " << time_acc;
-      EXPECT_LT(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value())
+      EXPECT_LT(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value())
         << "at t: " << i * dt
         << "s, but this angular velocity should only be achieved at t: " << time_acc;
     }
     ASSERT_EQ(
       controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(dt)),
       controller_interface::return_type::OK);
-    EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value(), 1e-3);
-    EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value(), 1e-3);
+    EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value(), 1e-3);
+    EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value(), 1e-3);
 
     // wait for the speed limiter to fill the queue
     for (int i = 0; i < 3; ++i)
@@ -619,8 +655,8 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
       ASSERT_EQ(
         controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
         controller_interface::return_type::OK);
-      EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value(), 1e-3);
-      EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value(), 1e-3);
+      EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value(), 1e-3);
+      EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value(), 1e-3);
     }
   }
 
@@ -637,18 +673,18 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
       ASSERT_EQ(
         controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(dt)),
         controller_interface::return_type::OK);
-      EXPECT_LT(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value())
+      EXPECT_LT(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value())
         << "at t: " << i * dt
         << "s, but this angular velocity should only be achieved at t: " << time_acc;
-      EXPECT_LT(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value())
+      EXPECT_LT(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value())
         << "at t: " << i * dt
         << "s, but this angular velocity should only be achieved at t: " << time_acc;
     }
     ASSERT_EQ(
       controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(dt)),
       controller_interface::return_type::OK);
-    EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value(), 1e-3);
-    EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value(), 1e-3);
+    EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value(), 1e-3);
+    EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value(), 1e-3);
 
     // wait for the speed limiter to fill the queue
     for (int i = 0; i < 3; ++i)
@@ -656,8 +692,8 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
       ASSERT_EQ(
         controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
         controller_interface::return_type::OK);
-      EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value(), 1e-3);
-      EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value(), 1e-3);
+      EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value(), 1e-3);
+      EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value(), 1e-3);
     }
   }
 
@@ -674,18 +710,18 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
       ASSERT_EQ(
         controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(dt)),
         controller_interface::return_type::OK);
-      EXPECT_GT(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value())
+      EXPECT_GT(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value())
         << "at t: " << i * dt
         << "s, but this angular velocity should only be achieved at t: " << time_acc;
-      EXPECT_GT(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value())
+      EXPECT_GT(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value())
         << "at t: " << i * dt
         << "s, but this angular velocity should only be achieved at t: " << time_acc;
     }
     ASSERT_EQ(
       controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(dt)),
       controller_interface::return_type::OK);
-    EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value(), 1e-3);
-    EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value(), 1e-3);
+    EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value(), 1e-3);
+    EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value(), 1e-3);
 
     // wait for the speed limiter to fill the queue
     for (int i = 0; i < 3; ++i)
@@ -693,8 +729,8 @@ TEST_F(TestDiffDriveController, test_speed_limiter)
       ASSERT_EQ(
         controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
         controller_interface::return_type::OK);
-      EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_.get_optional().value(), 1e-3);
-      EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_.get_optional().value(), 1e-3);
+      EXPECT_NEAR(linear / wheel_radius, left_wheel_vel_cmd_->get_optional().value(), 1e-3);
+      EXPECT_NEAR(linear / wheel_radius, right_wheel_vel_cmd_->get_optional().value(), 1e-3);
     }
   }
 }
@@ -707,9 +743,11 @@ TEST_F(TestDiffDriveController, activate_fails_with_wrong_resources_assigned_1)
       {rclcpp::Parameter("position_feedback", rclcpp::ParameterValue(false))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesPosFeedback();
-  ASSERT_EQ(controller_->on_activate(rclcpp_lifecycle::State()), CallbackReturn::ERROR);
+
+  ASSERT_THROW(activate_succeeds(controller_), std::runtime_error);
 }
 
 TEST_F(TestDiffDriveController, activate_fails_with_wrong_resources_assigned_2)
@@ -720,9 +758,11 @@ TEST_F(TestDiffDriveController, activate_fails_with_wrong_resources_assigned_2)
       {rclcpp::Parameter("position_feedback", rclcpp::ParameterValue(true))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesVelFeedback();
-  ASSERT_EQ(controller_->on_activate(rclcpp_lifecycle::State()), CallbackReturn::ERROR);
+
+  ASSERT_THROW(activate_succeeds(controller_), std::runtime_error);
 }
 
 TEST_F(TestDiffDriveController, activate_silently_ignores_with_unnecessary_resources_assigned_1)
@@ -734,9 +774,9 @@ TEST_F(TestDiffDriveController, activate_silently_ignores_with_unnecessary_resou
        rclcpp::Parameter("position_feedback", rclcpp::ParameterValue(false))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
   assignResourcesPosFeedback();
-  ASSERT_EQ(controller_->on_activate(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(activate_succeeds(controller_));
 }
 
 TEST_F(TestDiffDriveController, activate_silently_ignores_with_unnecessary_resources_assigned_2)
@@ -748,9 +788,9 @@ TEST_F(TestDiffDriveController, activate_silently_ignores_with_unnecessary_resou
        rclcpp::Parameter("position_feedback", rclcpp::ParameterValue(true))}),
     controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
   assignResourcesVelFeedback();
-  ASSERT_EQ(controller_->on_activate(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(activate_succeeds(controller_));
 }
 
 TEST_F(TestDiffDriveController, cleanup)
@@ -763,12 +803,12 @@ TEST_F(TestDiffDriveController, cleanup)
 
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(controller_->get_node()->get_node_base_interface());
-  auto state = controller_->configure();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
+
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesPosFeedback();
 
-  state = controller_->get_node()->activate();
-  ASSERT_EQ(State::PRIMARY_STATE_ACTIVE, state.id());
+  ASSERT_TRUE(activate_succeeds(controller_));
 
   waitForSetup(executor);
 
@@ -783,24 +823,22 @@ TEST_F(TestDiffDriveController, cleanup)
     controller_interface::return_type::OK);
 
   // should be moving
-  EXPECT_LT(0.0, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_LT(0.0, right_wheel_vel_cmd_.get_optional().value());
+  EXPECT_LT(0.0, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_LT(0.0, right_wheel_vel_cmd_->get_optional().value());
 
-  state = controller_->get_node()->deactivate();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
-
-  // should be stopped
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value())
-    << "Wheels should be halted on deactivate()";
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value())
-    << "Wheels should be halted on deactivate()";
-
-  state = controller_->get_node()->cleanup();
-  ASSERT_EQ(State::PRIMARY_STATE_UNCONFIGURED, state.id());
+  ASSERT_TRUE(deactivate_succeeds(controller_));
 
   // should be stopped
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value());
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value())
+    << "Wheels should be halted on deactivate()";
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value())
+    << "Wheels should be halted on deactivate()";
+
+  ASSERT_TRUE(cleanup_succeeds(controller_));
+
+  // should be stopped
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value());
 
   executor.cancel();
 }
@@ -816,15 +854,14 @@ TEST_F(TestDiffDriveController, correct_initialization_using_parameters)
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(controller_->get_node()->get_node_base_interface());
 
-  auto state = controller_->configure();
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesPosFeedback();
 
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
-  EXPECT_EQ(0.01, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_EQ(0.02, right_wheel_vel_cmd_.get_optional().value());
+  EXPECT_EQ(0.01, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_EQ(0.02, right_wheel_vel_cmd_->get_optional().value());
 
-  state = controller_->get_node()->activate();
-  ASSERT_EQ(State::PRIMARY_STATE_ACTIVE, state.id());
+  ASSERT_TRUE(activate_succeeds(controller_));
 
   // send msg
   const double linear = 1.0;
@@ -836,30 +873,29 @@ TEST_F(TestDiffDriveController, correct_initialization_using_parameters)
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
-  EXPECT_EQ(1.0, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_EQ(1.0, right_wheel_vel_cmd_.get_optional().value());
+  EXPECT_EQ(1.0, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_EQ(1.0, right_wheel_vel_cmd_->get_optional().value());
 
   // deactivated
   // wait so controller process the second point when deactivated
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  state = controller_->get_node()->deactivate();
-  ASSERT_EQ(state.id(), State::PRIMARY_STATE_INACTIVE);
+  ASSERT_TRUE(deactivate_succeeds(controller_));
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
 
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value()) << "Wheels are halted on deactivate()";
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value())
+    << "Wheels are halted on deactivate()";
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value())
     << "Wheels are halted on deactivate()";
 
   // cleanup
-  state = controller_->get_node()->cleanup();
-  ASSERT_EQ(State::PRIMARY_STATE_UNCONFIGURED, state.id());
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value());
+  ASSERT_TRUE(cleanup_succeeds(controller_));
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value());
 
-  state = controller_->configure();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   executor.cancel();
 }
 
@@ -884,26 +920,25 @@ TEST_F(TestDiffDriveController, chainable_controller_unchained_mode)
   ASSERT_TRUE(controller_->set_chained_mode(false));
   ASSERT_FALSE(controller_->is_in_chained_mode());
 
-  auto state = controller_->configure();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesPosFeedback();
 
-  state = controller_->get_node()->activate();
-  ASSERT_EQ(State::PRIMARY_STATE_ACTIVE, state.id());
+  ASSERT_TRUE(activate_succeeds(controller_));
 
   waitForSetup(executor);
 
   // Reference interfaces should be NaN on initialization
-  // (Note: reference_interfaces_ is protected, but this is
+  // (Note: ordered_exported_reference_interfaces_ is protected, but this is
   // a FRIEND_TEST so we can use it)
-  for (const auto & interface : controller_->reference_interfaces_)
+  for (const auto & interface : controller_->ordered_exported_reference_interfaces_)
   {
-    EXPECT_TRUE(std::isnan(interface));
+    EXPECT_TRUE(std::isnan(interface->get_optional().value()));
   }
   // But NaNs should not propagate to command interfaces
   // (these are set to 0.1 and 0.2 in InitController)
-  ASSERT_FALSE(std::isnan(left_wheel_vel_cmd_.get_optional().value()));
-  ASSERT_FALSE(std::isnan(right_wheel_vel_cmd_.get_optional().value()));
+  ASSERT_FALSE(std::isnan(left_wheel_vel_cmd_->get_optional().value()));
+  ASSERT_FALSE(std::isnan(right_wheel_vel_cmd_->get_optional().value()));
 
   // Check that a late command message causes the command interfaces to be set to 0.0
   const double linear = 1.0;
@@ -916,9 +951,9 @@ TEST_F(TestDiffDriveController, chainable_controller_unchained_mode)
   ASSERT_EQ(
     controller_->update(pub_node->get_clock()->now(), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value())
     << "Wheels should halt if command message is older than cmd_vel_timeout";
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value())
     << "Wheels should halt if command message is older than cmd_vel_timeout";
 
   // Now check that a timely published command message sets the command interfaces to the correct
@@ -930,33 +965,31 @@ TEST_F(TestDiffDriveController, chainable_controller_unchained_mode)
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
-  EXPECT_EQ(linear, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_EQ(linear, right_wheel_vel_cmd_.get_optional().value());
+  EXPECT_EQ(linear, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_EQ(linear, right_wheel_vel_cmd_->get_optional().value());
 
   // Now check that the command interfaces are set to 0.0 on deactivation
   // (despite calls to update())
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  state = controller_->get_node()->deactivate();
-  ASSERT_EQ(state.id(), State::PRIMARY_STATE_INACTIVE);
+  ASSERT_TRUE(deactivate_succeeds(controller_));
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
 
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on deactivate()";
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on deactivate()";
 
   // cleanup
-  state = controller_->get_node()->cleanup();
-  ASSERT_EQ(State::PRIMARY_STATE_UNCONFIGURED, state.id());
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value())
+  ASSERT_TRUE(cleanup_succeeds(controller_));
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on cleanup()";
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on cleanup()";
 
-  state = controller_->configure();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   executor.cancel();
 }
 
@@ -980,62 +1013,59 @@ TEST_F(TestDiffDriveController, chainable_controller_chained_mode)
   ASSERT_TRUE(controller_->set_chained_mode(true));
   ASSERT_TRUE(controller_->is_in_chained_mode());
 
-  auto state = controller_->configure();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesPosFeedback();
 
-  state = controller_->get_node()->activate();
-  ASSERT_EQ(State::PRIMARY_STATE_ACTIVE, state.id());
+  ASSERT_TRUE(activate_succeeds(controller_));
 
   waitForSetup(executor);
 
   // Reference interfaces should be NaN on initialization
-  for (const auto & interface : controller_->reference_interfaces_)
+  for (const auto & interface : controller_->ordered_exported_reference_interfaces_)
   {
-    EXPECT_TRUE(std::isnan(interface));
+    EXPECT_TRUE(std::isnan(interface->get_optional().value()));
   }
   // But NaNs should not propagate to command interfaces
   // (these are set to 0.1 and 0.2 in InitController)
-  ASSERT_FALSE(std::isnan(left_wheel_vel_cmd_.get_optional().value()));
-  ASSERT_FALSE(std::isnan(right_wheel_vel_cmd_.get_optional().value()));
+  ASSERT_FALSE(std::isnan(left_wheel_vel_cmd_->get_optional().value()));
+  ASSERT_FALSE(std::isnan(right_wheel_vel_cmd_->get_optional().value()));
 
-  // Imitate preceding controllers by setting reference_interfaces_
-  // (Note: reference_interfaces_ is protected, but this is
+  // Imitate preceding controllers by setting ordered_exported_reference_interfaces_
+  // (Note: ordered_exported_reference_interfaces_ is protected, but this is
   // a FRIEND_TEST so we can use it)
   const double linear = 3.0;
-  controller_->reference_interfaces_[0] = linear;
-  controller_->reference_interfaces_[1] = 0.0;
+  controller_->ordered_exported_reference_interfaces_[0]->set_value(linear);
+  controller_->ordered_exported_reference_interfaces_[1]->set_value(0.0);
 
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
-  EXPECT_EQ(linear, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_EQ(linear, right_wheel_vel_cmd_.get_optional().value());
+  EXPECT_EQ(linear, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_EQ(linear, right_wheel_vel_cmd_->get_optional().value());
 
   // Now check that the command interfaces are set to 0.0 on deactivation
   // (despite calls to update())
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  state = controller_->get_node()->deactivate();
-  ASSERT_EQ(state.id(), State::PRIMARY_STATE_INACTIVE);
+  ASSERT_TRUE(deactivate_succeeds(controller_));
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
 
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on deactivate()";
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on deactivate()";
 
   // cleanup
-  state = controller_->get_node()->cleanup();
-  ASSERT_EQ(State::PRIMARY_STATE_UNCONFIGURED, state.id());
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value())
+  ASSERT_TRUE(cleanup_succeeds(controller_));
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on cleanup()";
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on cleanup()";
 
-  state = controller_->configure();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   executor.cancel();
 }
 
@@ -1044,7 +1074,7 @@ TEST_F(TestDiffDriveController, reference_interfaces_are_properly_exported)
   ASSERT_EQ(
     InitController(left_wheel_names, right_wheel_names), controller_interface::return_type::OK);
 
-  ASSERT_EQ(controller_->on_configure(rclcpp_lifecycle::State()), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(configure_succeeds(controller_));
 
   auto reference_interfaces = controller_->export_reference_interfaces();
   ASSERT_EQ(reference_interfaces.size(), 2)
@@ -1084,26 +1114,25 @@ TEST_F(TestDiffDriveController, deactivate_then_activate)
 
   ASSERT_TRUE(controller_->set_chained_mode(false));
 
-  auto state = controller_->configure();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesPosFeedback();
 
-  state = controller_->get_node()->activate();
-  ASSERT_EQ(State::PRIMARY_STATE_ACTIVE, state.id());
+  ASSERT_TRUE(activate_succeeds(controller_));
 
   waitForSetup(executor);
 
   // Reference interfaces should be NaN on initialization
-  // (Note: reference_interfaces_ is protected, but this is
+  // (Note: ordered_exported_reference_interfaces_ is protected, but this is
   // a FRIEND_TEST so we can use it)
-  for (const auto & interface : controller_->reference_interfaces_)
+  for (const auto & interface : controller_->ordered_exported_reference_interfaces_)
   {
-    EXPECT_TRUE(std::isnan(interface));
+    EXPECT_TRUE(std::isnan(interface->get_optional().value()));
   }
   // But NaNs should not propagate to command interfaces
   // (these are set to 0.1 and 0.2 in InitController)
-  ASSERT_FALSE(std::isnan(left_wheel_vel_cmd_.get_optional().value()));
-  ASSERT_FALSE(std::isnan(right_wheel_vel_cmd_.get_optional().value()));
+  ASSERT_FALSE(std::isnan(left_wheel_vel_cmd_->get_optional().value()));
+  ASSERT_FALSE(std::isnan(right_wheel_vel_cmd_->get_optional().value()));
 
   // published command message sets the command interfaces to the correct values
   const double linear = 1.0;
@@ -1114,39 +1143,37 @@ TEST_F(TestDiffDriveController, deactivate_then_activate)
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
-  EXPECT_EQ(linear, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_EQ(linear, right_wheel_vel_cmd_.get_optional().value());
+  EXPECT_EQ(linear, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_EQ(linear, right_wheel_vel_cmd_->get_optional().value());
 
   // Now check that the command interfaces are set to 0.0 on deactivation
   // (despite calls to update())
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  state = controller_->get_node()->deactivate();
-  ASSERT_EQ(state.id(), State::PRIMARY_STATE_INACTIVE);
+  ASSERT_TRUE(deactivate_succeeds(controller_));
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
 
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on deactivate()";
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value())
     << "Wheels should be halted on deactivate()";
 
   // Activate again
-  state = controller_->get_node()->activate();
-  ASSERT_EQ(State::PRIMARY_STATE_ACTIVE, state.id());
+  ASSERT_TRUE(activate_succeeds(controller_));
 
   waitForSetup(executor);
 
-  // (Note: reference_interfaces_ is protected, but this is
+  // (Note: ordered_exported_reference_interfaces_ is protected, but this is
   // a FRIEND_TEST so we can use it)
-  for (const auto & interface : controller_->reference_interfaces_)
+  for (const auto & interface : controller_->ordered_exported_reference_interfaces_)
   {
-    EXPECT_TRUE(std::isnan(interface))
+    EXPECT_TRUE(std::isnan(interface->get_optional().value()))
       << "Reference interfaces should initially be NaN on activation";
   }
-  EXPECT_EQ(0.0, left_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, left_wheel_vel_cmd_->get_optional().value())
     << "Wheels should still have the same command as when they were last set (on deactivation)";
-  EXPECT_EQ(0.0, right_wheel_vel_cmd_.get_optional().value())
+  EXPECT_EQ(0.0, right_wheel_vel_cmd_->get_optional().value())
     << "Wheels should still have the same command as when they were last set (on deactivation)";
 
   // A new command should work as expected
@@ -1156,15 +1183,13 @@ TEST_F(TestDiffDriveController, deactivate_then_activate)
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
-  EXPECT_EQ(linear, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_EQ(linear, right_wheel_vel_cmd_.get_optional().value());
+  EXPECT_EQ(linear, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_EQ(linear, right_wheel_vel_cmd_->get_optional().value());
 
   // Deactivate again and cleanup
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  state = controller_->get_node()->deactivate();
-  ASSERT_EQ(state.id(), State::PRIMARY_STATE_INACTIVE);
-  state = controller_->get_node()->cleanup();
-  ASSERT_EQ(state.id(), State::PRIMARY_STATE_UNCONFIGURED);
+  ASSERT_TRUE(deactivate_succeeds(controller_));
+  ASSERT_TRUE(cleanup_succeeds(controller_));
   executor.cancel();
 }
 
@@ -1182,12 +1207,11 @@ TEST_F(TestDiffDriveController, command_with_zero_timestamp_is_accepted_with_war
 
   ASSERT_TRUE(controller_->set_chained_mode(false));
 
-  auto state = controller_->configure();
-  ASSERT_EQ(State::PRIMARY_STATE_INACTIVE, state.id());
+  ASSERT_TRUE(configure_succeeds(controller_));
+
   assignResourcesPosFeedback();
 
-  state = controller_->get_node()->activate();
-  ASSERT_EQ(State::PRIMARY_STATE_ACTIVE, state.id());
+  ASSERT_TRUE(activate_succeeds(controller_));
 
   waitForSetup(executor);
 
@@ -1200,15 +1224,199 @@ TEST_F(TestDiffDriveController, command_with_zero_timestamp_is_accepted_with_war
   ASSERT_EQ(
     controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
     controller_interface::return_type::OK);
-  EXPECT_EQ(linear, left_wheel_vel_cmd_.get_optional().value());
-  EXPECT_EQ(linear, right_wheel_vel_cmd_.get_optional().value());
+  EXPECT_EQ(linear, left_wheel_vel_cmd_->get_optional().value());
+  EXPECT_EQ(linear, right_wheel_vel_cmd_->get_optional().value());
 
   // Deactivate and cleanup
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  state = controller_->get_node()->deactivate();
-  ASSERT_EQ(state.id(), State::PRIMARY_STATE_INACTIVE);
-  state = controller_->get_node()->cleanup();
-  ASSERT_EQ(state.id(), State::PRIMARY_STATE_UNCONFIGURED);
+  ASSERT_TRUE(deactivate_succeeds(controller_));
+  ASSERT_TRUE(cleanup_succeeds(controller_));
+  executor.cancel();
+}
+
+// Regression test for https://github.com/ros-controls/ros2_controllers/issues/440
+// A cmd_vel_timeout of 0.0 disables the timeout: an arbitrarily old command must be
+// preserved instead of being overridden with zero.
+TEST_F(TestDiffDriveController, zero_cmd_vel_timeout_disables_timeout)
+{
+  ASSERT_EQ(
+    InitController(
+      left_wheel_names, right_wheel_names,
+      {rclcpp::Parameter("wheel_separation", 0.4), rclcpp::Parameter("wheel_radius", 1.0),
+       rclcpp::Parameter("cmd_vel_timeout", rclcpp::ParameterValue(0.0))}),
+    controller_interface::return_type::OK);
+  // choose radius = 1 so that the command values (rev/s) are the same as the linear velocity (m/s)
+
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(controller_->get_node()->get_node_base_interface());
+
+  ASSERT_TRUE(controller_->set_chained_mode(false));
+
+  ASSERT_TRUE(configure_succeeds(controller_));
+
+  assignResourcesPosFeedback();
+
+  ASSERT_TRUE(activate_succeeds(controller_));
+
+  waitForSetup(executor);
+
+  // before any command arrives the stored command is NaN: this update exercises the
+  // NaN-warning path with its finite throttle period while the timeout is disabled
+  ASSERT_EQ(
+    controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), rclcpp::Duration::from_seconds(0.01)),
+    controller_interface::return_type::OK);
+
+  // publish a command with an explicit old nonzero timestamp, so its age at update time is
+  // deterministic and would be far expired for any positive cmd_vel_timeout
+  const double linear = 1.0;
+  const rclcpp::Time command_stamp(1, 0, RCL_ROS_TIME);
+  publish_timestamped(linear, 0.0, command_stamp);
+  // wait for msg is be published to the system
+  controller_->wait_for_twist(executor);
+
+  ASSERT_EQ(
+    controller_->update(
+      command_stamp + rclcpp::Duration::from_seconds(10.0), rclcpp::Duration::from_seconds(0.01)),
+    controller_interface::return_type::OK);
+  EXPECT_EQ(linear, left_wheel_vel_cmd_->get_optional().value())
+    << "Wheels should not halt when cmd_vel_timeout is disabled";
+  EXPECT_EQ(linear, right_wheel_vel_cmd_->get_optional().value())
+    << "Wheels should not halt when cmd_vel_timeout is disabled";
+
+  // Deactivate and cleanup
+  ASSERT_TRUE(deactivate_succeeds(controller_));
+  ASSERT_TRUE(cleanup_succeeds(controller_));
+  executor.cancel();
+}
+
+TEST_F(TestDiffDriveController, test_open_loop_odometry_with_clamped_input)
+{
+  const double max_linear_vel = 0.5;
+  const double max_angular_vel = 0.5;
+
+  // Initialize the controller with open_loop enabled and strict velocity limits
+  ASSERT_EQ(
+    InitController(
+      left_wheel_names, right_wheel_names,
+      {rclcpp::Parameter("open_loop", rclcpp::ParameterValue(true)),
+       rclcpp::Parameter("linear.x.max_velocity", rclcpp::ParameterValue(max_linear_vel)),
+       rclcpp::Parameter("angular.z.max_velocity", rclcpp::ParameterValue(max_angular_vel))}),
+    controller_interface::return_type::OK);
+
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(controller_->get_node()->get_node_base_interface());
+
+  ASSERT_TRUE(configure_succeeds(controller_));
+
+  assignResourcesNoFeedback();
+
+  ASSERT_TRUE(activate_succeeds(controller_));
+
+  waitForSetup(executor);
+
+  const double dt_s = 0.1;
+  const auto dt = rclcpp::Duration::from_seconds(dt_s);
+
+  // call first to initialize time member variable
+  ASSERT_EQ(
+    controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), dt),
+    controller_interface::return_type::OK);
+
+  // Test Linear Clamping
+  const double commanded_linear = 5.0;
+  publish(commanded_linear, 0.0);
+  controller_->wait_for_twist(executor);
+
+  ASSERT_EQ(
+    controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME) + dt, dt),
+    controller_interface::return_type::OK);
+
+  // Odometry should reflect the clamped linear velocity
+  EXPECT_NEAR(controller_->odometry_.getLinear(), max_linear_vel, 1e-3);
+
+  // Verify that the position integration uses the clamped value (0.5 * 0.1s = 0.05m)
+  EXPECT_NEAR(controller_->odometry_.getX(), max_linear_vel * dt_s, 1e-3);
+
+  // Test Angular Clamping
+  const double commanded_angular = 5.0;
+  publish(0.0, commanded_angular);
+  controller_->wait_for_twist(executor);
+
+  ASSERT_EQ(
+    controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME) + dt + dt, dt),
+    controller_interface::return_type::OK);
+
+  // Verify the angular velocity and heading integration are properly clamped
+  EXPECT_NEAR(controller_->odometry_.getAngular(), max_angular_vel, 1e-3);
+  EXPECT_NEAR(controller_->odometry_.getHeading(), max_angular_vel * dt_s, 1e-3);
+
+  // Safely spin down the lifecycle
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  ASSERT_TRUE(deactivate_succeeds(controller_));
+  ASSERT_TRUE(cleanup_succeeds(controller_));
+  executor.cancel();
+}
+
+TEST_F(TestDiffDriveController, test_open_loop_odometry_with_unclamped_input)
+{
+  // Initialize the controller with open_loop enabled without velocity limits
+  ASSERT_EQ(
+    InitController(
+      left_wheel_names, right_wheel_names,
+      {rclcpp::Parameter("open_loop", rclcpp::ParameterValue(true))}),
+    controller_interface::return_type::OK);
+
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(controller_->get_node()->get_node_base_interface());
+
+  ASSERT_TRUE(configure_succeeds(controller_));
+
+  assignResourcesNoFeedback();
+
+  ASSERT_TRUE(activate_succeeds(controller_));
+
+  waitForSetup(executor);
+
+  const double dt_s = 0.1;
+  const auto dt = rclcpp::Duration::from_seconds(dt_s);
+
+  // call first to initialize time member variable
+  ASSERT_EQ(
+    controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME), dt),
+    controller_interface::return_type::OK);
+
+  // Test Linear
+  const double commanded_linear = 5.0;
+  publish(commanded_linear, 0.0);
+  controller_->wait_for_twist(executor);
+
+  ASSERT_EQ(
+    controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME) + dt, dt),
+    controller_interface::return_type::OK);
+
+  // Odometry should exactly reflect the commanded linear velocity
+  EXPECT_NEAR(controller_->odometry_.getLinear(), commanded_linear, 1e-3);
+
+  // Verify that the position integration uses the commanded value (5.0 * 0.1s = 0.5m)
+  EXPECT_NEAR(controller_->odometry_.getX(), commanded_linear * dt_s, 1e-3);
+
+  // Test Angular
+  const double commanded_angular = 5.0;
+  publish(0.0, commanded_angular);
+  controller_->wait_for_twist(executor);
+
+  ASSERT_EQ(
+    controller_->update(rclcpp::Time(0, 0, RCL_ROS_TIME) + dt + dt, dt),
+    controller_interface::return_type::OK);
+
+  // Verify the angular velocity and heading integration use the commanded value
+  EXPECT_NEAR(controller_->odometry_.getAngular(), commanded_angular, 1e-3);
+  EXPECT_NEAR(controller_->odometry_.getHeading(), commanded_angular * dt_s, 1e-3);
+
+  // Safely spin down the lifecycle
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  ASSERT_TRUE(deactivate_succeeds(controller_));
+  ASSERT_TRUE(cleanup_succeeds(controller_));
   executor.cancel();
 }
 

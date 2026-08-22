@@ -9,6 +9,10 @@ admittance_controller
 * Remove ``robot_description`` parameter from parameter YAML, because it is not used at all (`#963 <https://github.com/ros-controls/ros2_controllers/pull/963>`_).
 * Added ``~/wrench_reference`` input topic which allows to provide a force-torque offset as WrenchStamped (`#1249 <https://github.com/ros-controls/ros2_controllers/pull/1249>`_).
 
+battery_state_broadcaster
+*************************
+* 🚀 The battery_state_broadcaster was added 🎉 (`#1888 <https://github.com/ros-controls/ros2_controllers/pull/1888>`_).
+
 state_interfaces_broadcaster
 *********************************
 * 🚀 The state_interfaces_broadcaster was added 🎉 (`#2006 <https://github.com/ros-controls/ros2_controllers/pull/2006>`_).
@@ -76,6 +80,13 @@ joint_trajectory_controller
   don't contain velocity / acceleration information, but the trajectory does. This way, the segment
   up to the first waypoint will use the same interpolation as the rest of the trajectory. (`#2043
   <https://github.com/ros-controls/ros2_controllers/pull/2043>`_)
+* Scaling support was added in `#1191
+  <https://github.com/ros-controls/ros2_controllers/pull/1191>`__. With this the controller
+  "stretches the time" with which it progresses in the trajectory. Scaling can either be set
+  manually or it can be synchronized with the hardware. See :ref:`jtc_speed_scaling` for details.
+* Added decelerate-to-stop functionality when a trajectory is canceled or preempted. Instead of immediately holding position, the controller can now smoothly decelerate each joint to a stop using the per-joint ``max_deceleration_on_cancel`` parameter. (`#2163 <https://github.com/ros-controls/ros2_controllers/pull/2163>`_)
+* When using ``set_last_command_interface_value_as_state_on_activation``, it is no longer required to have state and command for the same interface type (e.g. velocity). With this param set, the JTC state and command will be initialized using a command interface value, if available, and will otherwise fallback to the value read from the state interface. This allows you to have position command and position+velocity state, for example, which previously would have been disallowed (with this param set).  (`#2294
+  <https://github.com/ros-controls/ros2_controllers/pull/2294>`_)
 
 mecanum_drive_controller
 ************************
@@ -98,6 +109,7 @@ pid_controller
   * The legacy ``antiwindup`` boolean and integral clamp parameters ``i_clamp_max``/``i_clamp_min`` have been deprecated in favor of the new ``antiwindup_strategy`` parameter. A ``tracking_time_constant`` parameter has also been introduced to configure the back-calculation strategy.
   * A new ``error_deadband`` parameter stops integration when the error is within a specified range.
 * PID state publisher can be turned off or on by using  ``activate_state_publisher`` parameter. (`#1823 <https://github.com/ros-controls/ros2_controllers/pull/1823>`_).
+* Added parameter ``set_current_state_as_first_setpoint`` (default: true) to set the current state as the first setpoint when the controller is activated, helping to avoid large initial errors and sudden jumps in control output (`#2205 <https://github.com/ros-controls/ros2_controllers/pull/2205>`_).
 
 steering_controllers_library
 ********************************
@@ -121,3 +133,11 @@ force_torque_sensor_broadcaster
 * Multiplier support was added. Users can now specify per–axis scaling factors for both force and torque readings, applied after the existing offset logic. (`#1647 <https://github.com/ros-controls/ros2_controllers/pull/1647/files>`__).
 * Added support for filter chains, allowing users to configure a sequence of filter plugins with their parameters. The force/torque sensor readings are filtered sequentially and published on a separate topic.
 * Added support for transforming Wrench messages to a given list of target frames. This is useful when applications need force/torque data in their preferred coordinate frames. (`#2021 <https://github.com/ros-controls/ros2_controllers/pull/2021/files>`__).
+
+motion_primitives_forward_controller
+*******************************************
+* 🚀 The motion_primitives_forward_controller was added 🎉 (`#1636 <https://github.com/ros-controls/ros2_controllers/pull/1636>`_).
+
+magnetometer_broadcaster
+************************
+New package to broadcast ``sensor_msgs/msg/MagneticField`` from state interfaces defined by the ``semantic_components::MagneticFieldSensor``.
